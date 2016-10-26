@@ -18,6 +18,7 @@ project (${JERRY_CORE_NAME} C)
 
 # Optional features
 set(FEATURE_CPOINTER_32_BIT OFF     CACHE BOOL   "Enable 32 bit compressed pointers?")
+set(FEATURE_DEBUGGER        OFF     CACHE BOOL   "Enable debugger option for JerryScript?")
 set(FEATURE_ERROR_MESSAGES  OFF     CACHE BOOL   "Enable error messages?")
 set(FEATURE_JS_PARSER       ON      CACHE BOOL   "Enable js-parser?")
 set(FEATURE_MEM_STATS       OFF     CACHE BOOL   "Enable memory statistics?")
@@ -33,6 +34,7 @@ set(MEM_HEAP_SIZE_KB        "512"   CACHE STRING "Size of memory heap, in kiloby
 
 # Status messages
 message(STATUS "FEATURE_CPOINTER_32_BIT   " ${FEATURE_CPOINTER_32_BIT})
+message(STATUS "FEATURE_DEBUGGER          " ${FEATURE_DEBUGGER})
 message(STATUS "FEATURE_ERROR_MESSAGES    " ${FEATURE_ERROR_MESSAGES})
 message(STATUS "FEATURE_JS_PARSER         " ${FEATURE_JS_PARSER})
 message(STATUS "FEATURE_MEM_STATS         " ${FEATURE_MEM_STATS})
@@ -154,6 +156,11 @@ endif()
 # Memory statistics
 if(FEATURE_MEM_STATS)
   set(DEFINES_JERRY ${DEFINES_JERRY} JMEM_STATS)
+endif()
+
+# Enable debugger
+if(FEATURE_DEBUGGER)
+  set(DEFINES_JERRY ${DEFINES_JERRY} JERRY_DEBUGGER)
 endif()
 
 # Memory management stress-test mode
