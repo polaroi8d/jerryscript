@@ -52,6 +52,7 @@ typedef enum
   JERRY_INIT_SHOW_REGEXP_OPCODES = (1u << 1), /**< dump regexp byte-code to log after compilation */
   JERRY_INIT_MEM_STATS           = (1u << 2), /**< dump memory statistics */
   JERRY_INIT_MEM_STATS_SEPARATE  = (1u << 3), /**< dump memory statistics and reset peak values after parse */
+  JERRY_INIT_LEXICAL_ENV         = (1u << 4), /**< enable the lexical environment for the debugger */
 } jerry_init_flag_t;
 
 /**
