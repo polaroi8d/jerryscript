@@ -50,6 +50,7 @@ typedef enum
   JERRY_INIT_SHOW_REGEXP_OPCODES = (1u << 1), /**< dump regexp byte-code to log after compilation */
   JERRY_INIT_MEM_STATS           = (1u << 2), /**< dump memory statistics */
   JERRY_INIT_MEM_STATS_SEPARATE  = (1u << 3), /**< dump memory statistics and reset peak values after parse */
+  JERRY_INIT_DEBUGGER            = (1u << 4), /**< enable all features required by debugging */
 } jerry_init_flag_t;
 
 /**
@@ -182,6 +183,8 @@ void jerry_gc (void);
  */
 bool jerry_run_simple (const jerry_char_t *script_source_p, size_t script_source_size, jerry_init_flag_t flags);
 jerry_value_t jerry_parse (const jerry_char_t *source_p, size_t source_size, bool is_strict);
+jerry_value_t jerry_parse_named_resource (const jerry_char_t *name_p, size_t name_length,
+                                          const jerry_char_t *source_p, size_t source_size, bool is_strict);
 jerry_value_t jerry_run (const jerry_value_t func_val);
 jerry_value_t jerry_eval (const jerry_char_t *source_p, size_t source_size, bool is_strict);
 
@@ -334,6 +337,7 @@ size_t jerry_parse_and_save_snapshot (const jerry_char_t *source_p, size_t sourc
 jerry_value_t jerry_exec_snapshot (const void *snapshot_p, size_t snapshot_size, bool copy_bytecode);
 size_t jerry_parse_and_save_literals (const jerry_char_t *source_p, size_t source_size, bool is_strict,
                                       uint8_t *buffer_p, size_t buffer_size, bool is_c_format);
+
 
 /**
  * @}

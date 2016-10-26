@@ -19,6 +19,8 @@
 #include "ecma-helpers.h"
 #include "ecma-lcache.h"
 #include "ecma-property-hashmap.h"
+#include "jcontext.h"
+#include "jerry-debugger.h"
 #include "jrt-bit-fields.h"
 #include "byte-code.h"
 #include "re-compiler.h"
@@ -1435,6 +1437,13 @@ ecma_bytecode_deref (ecma_compiled_code_t *bytecode_p) /**< byte code pointer */
 
   if (bytecode_p->status_flags & CBC_CODE_FLAGS_FUNCTION)
   {
+#ifdef JERRY_DEBUGGER
+    if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+    {
+      jerry_debugger_send_function_cp (JERRY_DEBUGGER_FREE_BYTE_CODE_CP, bytecode_p);
+    }
+#endif /* JERRY_DEBUGGER */
+
     jmem_cpointer_t *literal_start_p = NULL;
     uint32_t literal_end;
     uint32_t const_literal_end;
