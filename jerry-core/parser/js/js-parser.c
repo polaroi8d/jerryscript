@@ -2247,6 +2247,10 @@ parser_parse_script (const uint8_t *source_p, /**< source code */
   parser_error_location_t parser_error;
   *bytecode_data_p = parser_parse_source (source_p, size, is_strict, &parser_error);
 
+#ifdef JERRY_DEBUGGER
+  JMEM_CP_SET_NON_NULL_POINTER (jerry_global_context.debug_main_bytecode_data_cp, *bytecode_data_p);
+#endif /* JERRY_DEBUUGER */
+
   if (!*bytecode_data_p)
   {
     if (parser_error.error == PARSER_ERR_OUT_OF_MEMORY)

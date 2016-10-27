@@ -85,6 +85,11 @@ typedef struct
   uint8_t valgrind_freya_mempool_request; /**< Tells whether a pool manager
                                            *   allocator request is in progress */
 #endif /* JERRY_VALGRIND_FREYA */
+
+#ifdef JERRY_DEBUGGER
+  jmem_cpointer_t debug_func_bytecode_data_cp; /**< compressed pointer for the function byte code */
+  jmem_cpointer_t debug_main_bytecode_data_cp; /**< compressed pointer for main program byte code */
+#endif /* JERRY_DEBUGGER */
 } jerry_context_t;
 
 /**
