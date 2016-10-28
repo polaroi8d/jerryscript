@@ -1558,13 +1558,13 @@ parser_parse_statements (parser_context_t *context_p) /**< context */
   parser_stack_push_uint8 (context_p, PARSER_STATEMENT_START);
   parser_stack_iterator_init (context_p, &context_p->last_statement);
 
-#ifdef DEBUGGER
+#ifdef JERRY_DEBUGGER
   /* Set lexical enviroment for the debugger*/
-  if (JERRY_INIT_LEXICAL_ENV)
+  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_LEXICAL_ENV)
   {
     context_p->status_flags |= PARSER_LEXICAL_ENV_NEEDED;
   }
-#endif /* DEBUGGER */
+#endif /* JERRY_DEBUGGER */
 
   while (context_p->token.type == LEXER_LITERAL
          && context_p->token.lit_location.type == LEXER_STRING_LITERAL)
