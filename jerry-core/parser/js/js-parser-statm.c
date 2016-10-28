@@ -16,6 +16,9 @@
 
 #include "js-parser-internal.h"
 
+#ifdef JERRY_DEBUGGER
+ #include "jcontext.h"
+#endif /* JERRY_DEBUGGER */
 /** \addtogroup parser Parser
  * @{
  *
@@ -1560,7 +1563,7 @@ parser_parse_statements (parser_context_t *context_p) /**< context */
 
 #ifdef JERRY_DEBUGGER
   /* Set lexical enviroment for the debugger*/
-  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_LEXICAL_ENV)
+  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
   {
     context_p->status_flags |= PARSER_LEXICAL_ENV_NEEDED;
   }
