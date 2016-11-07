@@ -25,10 +25,10 @@ def main():
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect((HOST, PORT))
     except socket.error, msg:
-        print('Failed to create the socket. Error code: %d, Error message: %s' % (msg[0], msg[1]))
-        sys.exit()
+        print >> sys.stderr, ('Failed to create the socket. Error code: %d, Error message: %s' % (msg[0], msg[1]))
+        sys.exit(1)
 
-    print ('Socket created on: %d'% PORT)
+    print('Socket created on: %d' % (PORT))
 
     data = client_socket.recv(512)
     print('Received: %s' % (data))
