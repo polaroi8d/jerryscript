@@ -20,14 +20,19 @@ import sys
 PORT = 5001
 HOST = "localhost"
 
+
 def main():
     try:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect((HOST, PORT))
-    except socket.error, msg:
-        print >> sys.stderr, ('Failed to create the socket. Error code: %d, Error message: %s' % (msg[0], msg[1]))
-        sys.exit(1)
-
+    except socket.error as error_msg:
+        try:
+            errno = error_msg.errno
+            msg = str(error_msg)
+        except:
+            errno = error_msg[0]
+            msg = error_msg[1]
+        sys.exit('Failed to create the socket. Error: %d %s' % (errno, msg))
     print('Socket created on: %d' % (PORT))
 
     data = client_socket.recv(512)
