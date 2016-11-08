@@ -124,6 +124,7 @@ print_help (char *name)
                       "  --parse-only\n"
                       "  --show-opcodes\n"
                       "  --show-regexp-opcodes\n"
+                      "  --jerry-debugger-support\n"
                       "  --save-snapshot-for-global FILE\n"
                       "  --save-snapshot-for-eval FILE\n"
                       "  --save-literals-list-format FILE\n"
@@ -434,6 +435,11 @@ main (int argc,
         jerry_port_log (JERRY_LOG_LEVEL_WARNING,
                         "Ignoring 'show-regexp-opcodes' option because this feature is disabled!\n");
       }
+    }
+    else if (!strcmp ("--jerry-debugger-support", argv[i]))
+    {
+      flags = JERRY_INIT_DEBUGGER;
+      jerry_port_default_set_log_level (JERRY_LOG_LEVEL_DEBUG);
     }
     else if (!strcmp ("--save-snapshot-for-global", argv[i])
              || !strcmp ("--save-snapshot-for-eval", argv[i]))
