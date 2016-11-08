@@ -120,7 +120,7 @@ print_help (char *name)
                       "  --parse-only\n"
                       "  --show-opcodes\n"
                       "  --show-regexp-opcodes\n"
-                      "  --jerry-debugger\n"
+                      "  --jerry-debugger-support\n"
                       "  --save-snapshot-for-global FILE\n"
                       "  --save-snapshot-for-eval FILE\n"
                       "  --exec-snapshot FILE\n"
@@ -396,7 +396,7 @@ main (int argc,
       flags |= JERRY_INIT_SHOW_REGEXP_OPCODES;
       jerry_port_default_set_log_level (JERRY_LOG_LEVEL_DEBUG);
     }
-    else if (!strcmp ("--jerry-debugger", argv[i]))
+    else if (!strcmp ("--jerry-debugger-support", argv[i]))
     {
       flags = JERRY_INIT_DEBUGGER;
       jerry_port_default_set_log_level (JERRY_LOG_LEVEL_DEBUG);
