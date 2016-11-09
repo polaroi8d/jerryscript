@@ -18,6 +18,15 @@
 
 #define MAX_MESSAGE_SIZE 128
 
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdbool.h>
+
+extern bool remote_init(void);
+extern void connection_closed(void);
+extern void send_to_client(const char* data, uint16_t data_len);
+
 /**
 * Package header
 */
