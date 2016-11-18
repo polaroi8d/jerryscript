@@ -271,6 +271,10 @@ typedef struct
   int is_show_opcodes;                        /**< show opcodes */
   uint32_t total_byte_code_size;              /**< total byte code size */
 #endif /* PARSER_DUMP_BYTE_CODE */
+
+#ifdef JERRY_DEBUGGER
+  parser_line_counter_t last_breakpoint_line;  /**< last line where breakpoint was inserted */
+#endif /* JERRY_DEBUGGER */
 } parser_context_t;
 
 /**
