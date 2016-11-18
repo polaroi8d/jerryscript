@@ -21,6 +21,12 @@
 
 #define MAX_BUFFER_SIZE 128
 
+extern uint8_t jerry_debugger_buffer[MAX_BUFFER_SIZE];
+
+extern bool jerry_debugger_socket_init (void);
+extern void jerry_debugger_connection_end (void);
+extern bool jerry_debugger_send (size_t data_len);
+
 /**
  * Limited resources available for the engine, so it is important to
  * check the maximum buffer size. It need to be between 64 and 256.
