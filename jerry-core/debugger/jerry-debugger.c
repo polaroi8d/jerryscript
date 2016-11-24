@@ -26,6 +26,7 @@
 #define BACKLOG 1
 
 static int jerry_debugger_connection;    /**< hold the file descriptor for the accepted socket */
+uint8_t jerry_debugger_buffer[MAX_BUFFER_SIZE];   /**< buffer for socket communication */
 
 bool jerry_debugger_socket_init ()
 {
