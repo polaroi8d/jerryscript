@@ -438,7 +438,7 @@ main (int argc,
     }
     else if (!strcmp ("--jerry-debugger-support", argv[i]))
     {
-      flags = JERRY_INIT_DEBUGGER;
+      flags |= JERRY_INIT_DEBUGGER;
       jerry_port_default_set_log_level (JERRY_LOG_LEVEL_DEBUG);
     }
     else if (!strcmp ("--save-snapshot-for-global", argv[i])
