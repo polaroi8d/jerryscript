@@ -21,6 +21,7 @@
 
 #include "jerry-debugger.h"
 #include "jerry-port.h"
+#include "jcontext.h"
 
 #define PORT 5001
 #define BACKLOG 1
@@ -28,16 +29,22 @@
 static int jerry_debugger_connection;    /**< hold the file descriptor for the accepted socket */
 uint8_t jerry_debugger_buffer[MAX_BUFFER_SIZE];   /**< buffer for socket communication */
 
+/*
+ * Initialize the socket connection
+ *
+ * @return true - if the connection succeeded
+ *         false - otherwise.
+ */
 bool jerry_debugger_socket_init ()
 {
   /* The arguments optval is used to access option values for setsockopt(). */
   bool optval = true;
 
-  int jerry_debugger_socket;        /**< socket file descriptor for the remote communication */
+  int jerry_debugger_socket;  /* socket file descriptor for the remote communication */
 
-  struct sockaddr_in server_addr, client_addr;  /**< declarations of the socket address */
-  socklen_t sin_size = sizeof (struct sockaddr_in);  /**< size of the structure pointed by
-                                                      *   the server_addr and client_addr */
+  struct sockaddr_in server_addr, client_addr;  /* declarations of the socket address */
+  socklen_t sin_size = sizeof (struct sockaddr_in);  /* size of the structure pointed by
+                                                      * the server_addr and client_addr */
 
   /* Server adress declaration */
   server_addr.sin_family = AF_INET;
@@ -90,14 +97,21 @@ bool jerry_debugger_socket_init ()
   return true;
 } /* jerry_debugger_socket_init */
 
-/* Close the socket connection with the client */
+/*
+ * Close the socket connection with the client.
+ */
 void jerry_debugger_connection_end ()
 {
   jerry_port_log (JERRY_LOG_LEVEL_DEBUG, "TCPServer connection closed on port: %d\n", PORT);
   close (jerry_debugger_connection);
 } /* jerry_debugger_connection_end */
 
-/* Send the parsed file names to the client side */
+/*
+ * Send the parsed file names to the client side
+ *
+ * @return true - if the data was send successfully to the client side
+ *         false - otherwise.
+ */
 bool jerry_debugger_send (size_t data_len) /**< data length */
 {
   ssize_t byte_send = send (jerry_debugger_connection, jerry_debugger_buffer, data_len, 0);
@@ -113,3 +127,54 @@ bool jerry_debugger_send (size_t data_len) /**< data length */
   }
   return true;
 } /* jerry_debugger_send */
+
+/**
+ * Send string to the client.
+ */
+static void
+jerry_debug_send_string (uint8_t message_type, /**< message type */
+                         const jerry_char_t *string_p, /**< content string */
+                         size_t string_length) /**< length of content string */
+{
+  if (!(JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER))
+  {
+    return;
+  }
+
+  const size_t max_fragment_len = JERRY_DEBUGGER_MAX_SIZE (char);
+
+  JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->header.type = message_type;
+  JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->header.size = (uint8_t) max_fragment_len;
+
+  while (string_length > max_fragment_len)
+  {
+    memcpy (JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->string,
+            string_p,
+            max_fragment_len);
+
+    jerry_debugger_send (sizeof (jerry_debugger_message_string_t));
+
+    string_length -= max_fragment_len;
+    string_p += max_fragment_len;
+  }
+
+  JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->header.type = (uint8_t) (message_type + 1);
+  JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->header.size = (uint8_t) string_length;
+
+  memcpy (JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->string,
+          string_p,
+          string_length);
+
+  jerry_debugger_send (sizeof (jerry_debugger_message_header_t) + string_length);
+} /* jerry_debug_send_string */
+
+
+/**
+ * Send the file name of the source code to the client.
+ */
+void
+jerry_debug_send_source_file_name (const jerry_char_t *file_name_p, /**< file name */
+                                   size_t file_name_length) /**< length of file name */
+{
+  jerry_debug_send_string (JERRY_DEBUGGER_SOURCE_FILE_NAME, file_name_p, file_name_length);
+} /* jerry_debug_send_source_file_name */

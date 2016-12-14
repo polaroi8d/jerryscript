@@ -332,6 +332,13 @@ jerry_value_t jerry_exec_snapshot (const void *snapshot_p, size_t snapshot_size,
 size_t jerry_parse_and_save_literals (const jerry_char_t *source_p, size_t source_size, bool is_strict,
                                       uint8_t *buffer_p, size_t buffer_size, bool is_c_format);
 
+#ifdef JERRY_DEBUGGER
+/**
+ * Debugger functions
+ */
+void jerry_debug_send_source_file_name (const jerry_char_t *, size_t);
+#endif /* JERRY_DEBUGGER */
+
 /**
  * @}
  */
