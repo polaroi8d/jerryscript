@@ -19,7 +19,7 @@
 #include "jmem-allocator.h"
 #include <stdint.h>
 
-#define MAX_BUFFER_SIZE 128
+#define MAX_BUFFER_SIZE 64
 
 extern uint8_t jerry_debugger_buffer[MAX_BUFFER_SIZE];
 
@@ -36,7 +36,7 @@ extern bool jerry_debugger_send (size_t data_len);
 #endif /* MAX_BUFFER_SIZE < 64 || MAX_BUFFER_SIZE > 256 */
 
 /**
- * Calculate how many soruce file name, function name and breakpoint
+ * Calculate how many source file name, function name and breakpoint
  * can send in one buffer without overflow.
  */
 #define JERRY_DEBUGGER_MAX_SIZE(type) \
@@ -52,16 +52,16 @@ extern bool jerry_debugger_send (size_t data_len);
  */
 typedef enum
 {
-  JERRY_DEBUGGER_BREAKPOINT_LIST,                 /**< there is more piece of the breakpoint list */
-  JERRY_DEBUGGER_BREAKPOINT_LIST_END,             /**< the last piece of the breakpoint list
-                                                   *   or when one buffer send is enough for the engine */
-  JERRY_DEBUGGER_FUNCTION_NAME,                   /**< there is more piece of the function name */
-  JERRY_DEBUGGER_FUNCTION_NAME_END,               /**< the last piece of the function name
-                                                   *   or when one buffer send is enough for the engine */
-  JERRY_DEBUGGER_SOURCE_FILE_NAME,                /**< there is more piece of the source file name */
-  JERRY_DEBUGGER_SOURCE_FILE_NAME_END,            /**< if we send the last piece of the source file name
-                                                   *   or when one buffer send is enough for the engine  */
-  JERRY_DEBUGGER_UNIQUE_START_BYTE_CODE_CPTR,     /**< byte code starter compressed pointer */
+  JERRY_DEBUGGER_BREAKPOINT_LIST = 1,                 /**< there is more piece of the breakpoint list */
+  JERRY_DEBUGGER_BREAKPOINT_LIST_END = 2,             /**< the last piece of the breakpoint list
+                                                       *   or when one buffer send is enough for the engine */
+  JERRY_DEBUGGER_FUNCTION_NAME = 3,                   /**< there is more piece of the function name */
+  JERRY_DEBUGGER_FUNCTION_NAME_END = 4,               /**< the last piece of the function name
+                                                       *   or when one buffer send is enough for the engine */
+  JERRY_DEBUGGER_SOURCE_FILE_NAME = 5,                /**< there is more piece of the source file name */
+  JERRY_DEBUGGER_SOURCE_FILE_NAME_END = 6,            /**< if we send the last piece of the source file name
+                                                       *   or when one buffer send is enough for the engine  */
+  JERRY_DEBUGGER_UNIQUE_START_BYTE_CODE_CPTR = 7,     /**< byte code starter compressed pointer */
 } jerry_debugger_header_type_t;
 
 /**
@@ -69,30 +69,21 @@ typedef enum
  */
 typedef struct
 {
-  jerry_debugger_header_type_t type; /**< type of the message */
+  uint8_t type; /**< type of the message */
   uint8_t size; /**< size of the message */
 } jerry_debugger_message_header_t;
 
 /**
- *  Source file name
+ * String (Source file name or function name)
  */
 typedef struct
 {
   jerry_debugger_message_header_t header; /**< header of the message */
-  char file_name[JERRY_DEBUGGER_MAX_SIZE (char)]; /**< JavaScript source file name */
-} jerry_debugger_message_source_name_t;
+  char string[JERRY_DEBUGGER_MAX_SIZE (char)]; /**< string */
+} jerry_debugger_message_string_t;
 
 /**
- *  Function name
- */
-typedef struct
-{
-  jerry_debugger_message_header_t header; /**< header of the function name struct */
-  char function_name[JERRY_DEBUGGER_MAX_SIZE (char)]; /**< the message which contains the function name */
-} jerry_debugger_message_function_name_t;
-
-/**
- *  Byte code compressed pointer
+ * Byte code compressed pointer
  */
 typedef struct
 {
@@ -110,7 +101,7 @@ typedef struct
 } jerry_debugger_bp_pairs_t;
 
 /**
- *  Breakpoint list
+ * Breakpoint list
  */
 typedef struct
 {
@@ -118,5 +109,10 @@ typedef struct
   /** array of the breakpoint pairs */
   jerry_debugger_bp_pairs_t breakpoint_pairs[JERRY_DEBUGGER_MAX_SIZE (jerry_debugger_bp_pairs_t)];
 } jerry_debugger_breakpoint_list_t;
+
+/**
+ * Type cast the debugger buffer into a specific type.
+ */
+#define JERRY_DEBUGGER_BUFFER_AS(type) ((type *) &jerry_debugger_buffer)
 
 #endif /* JERRY_DEBUGGER_H */

@@ -292,6 +292,13 @@ bool jerry_foreach_object_property (const jerry_value_t, jerry_object_property_f
 size_t jerry_parse_and_save_snapshot (const jerry_char_t *, size_t, bool, bool, uint8_t *, size_t);
 jerry_value_t jerry_exec_snapshot (const void *, size_t, bool);
 
+#ifdef JERRY_DEBUGGER
+/**
+ * Debugger functions
+ */
+void jerry_debug_send_source_file_name (const jerry_char_t *, size_t);
+#endif /* JERRY_DEBUGGER */
+
 /**
  * @}
  */

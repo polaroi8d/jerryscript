@@ -23,6 +23,10 @@
 #include "jerry-port.h"
 #include "jerry-port-default.h"
 
+#ifdef JERRY_DEBUGGER
+#include "jerry-debugger.h"
+#endif /* JERRY_DEBUGGER */
+
 /**
  * Maximum command line arguments number
  */
@@ -547,6 +551,13 @@ main (int argc,
     {
       size_t source_size;
       const jerry_char_t *source_p = read_file (file_names[i], &source_size);
+
+      /**
+       * Send the source file name to the client
+       */
+#ifdef JERRY_DEBUGGER
+      jerry_debug_send_source_file_name ((jerry_char_t *) file_names[i], strlen (file_names[i]));
+#endif /* JERRY_DEBUGGER */
 
       if (source_p == NULL)
       {
