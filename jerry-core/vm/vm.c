@@ -2303,10 +2303,15 @@ vm_loop (vm_frame_ctx_t *frame_ctx_p) /**< frame context */
           JERRY_ASSERT (frame_ctx_p->registers_p + register_end + frame_ctx_p->context_depth == stack_top_p);
           continue;
         }
-        case VM_OC_BREAKPOINT:
+        case VM_OC_BREAKPOINT_ENABLED:
         {
-            JERRY_ASSERT (opcode == CBC_BREAKPOINT);
-            continue;
+          JERRY_ASSERT (opcode == CBC_BREAKPOINT_ENABLED);
+          continue;
+        }
+        case VM_OC_BREAKPOINT_DISABLED:
+        {
+          JERRY_ASSERT (opcode == CBC_BREAKPOINT_DISABLED);
+          continue;
         }
         default:
         {

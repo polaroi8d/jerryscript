@@ -1860,6 +1860,10 @@ parser_parse_source (const uint8_t *source_p, /**< valid UTF-8 source code */
   }
 #endif /* PARSER_DUMP_BYTE_CODE */
 
+#ifdef JERRY_DEBUGGER
+  context.last_breakpoint_line = 0; /**< last line where breapoint was inserted */
+#endif /* JERRY_DEBUGGER */
+
   PARSER_TRY (context.try_buffer)
   {
     /* Pushing a dummy value ensures the stack is never empty.
@@ -1996,6 +2000,19 @@ parser_parse_function (parser_context_t *context_p, /**< context */
     JERRY_DEBUG_MSG ("\n--- Function parsing start ---\n\n");
   }
 #endif /* PARSER_DUMP_BYTE_CODE */
+
+#ifdef JERRY_DEBUGGER
+  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+  {
+    if (context_p->line != context_p->last_breakpoint_line)
+    {
+      JERRY_DEBUG_MSG ("Insert function breakpoint: %d (%d)\n", context_p->line, context_p->last_breakpoint_line);
+      parser_emit_cbc (context_p, CBC_BREAKPOINT_DISABLED);
+      parser_flush_cbc (context_p);
+      context_p->last_breakpoint_line = context_p->line;
+    }
+  }
+#endif /* JERRY_DEBUGGER */
 
   lexer_next_token (context_p);
 
