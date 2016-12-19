@@ -2305,8 +2305,8 @@ vm_loop (vm_frame_ctx_t *frame_ctx_p) /**< frame context */
         }
         case VM_OC_BREAKPOINT:
         {
-            JERRY_ASSERT (opcode == CBC_BREAKPOINT);
-            continue;
+          JERRY_ASSERT (opcode == CBC_BREAKPOINT);
+          continue;
         }
         default:
         {
