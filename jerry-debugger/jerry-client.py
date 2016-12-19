@@ -33,6 +33,10 @@ HOST = "localhost"
 
 def main():
     source_name = ''
+    source_name_list = []
+    function_name = ''
+    function_name_list = []
+
     try:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect((HOST, PORT))
@@ -49,6 +53,9 @@ def main():
     while True:
         data = client_socket.recv(MAX_BUFFER_SIZE)
 
+        if not data: #break the while loop if there is no more data
+            break;
+
         buffer_type, buffer_size = unpack('BB', data[:2])
         print('Buffer type: %d' % buffer_type)
         print('Message size: %d' % buffer_size)
@@ -64,9 +71,25 @@ def main():
             source_name += source_name_end[0]
 
             print('%s' % (source_name_end))
-
             print('Source %s file name parsed.' % (source_name))
-            break # Until there is no more implementation
+            source_name_list.append(source_name)
+            source_name = ''
+
+        elif buffer_type == JERRY_DEBUGGER_FUNCTION_NAME:
+            function_name_tmp = unpack('<%ds' % (buffer_size), data[2:buffer_size+2])
+            function_name += function_name_tmp[0]
+
+            print('%s' % (function_name_tmp))
+
+        elif buffer_type == JERRY_DEBUGGER_FUNCTION_NAME_END:
+            function_name_end = unpack('<%ds' % (buffer_size), data[2:buffer_size+2])
+            function_name += function_name_end[0]
+
+            print('%s' % (function_name_end))
+            print('Function %s parsed.' % (function_name))
+            function_name_list.append(function_name)
+            function_name = ''
+
         else:
             print("Feature implementation is processing...")
 

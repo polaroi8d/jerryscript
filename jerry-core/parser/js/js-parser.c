@@ -2008,6 +2008,14 @@ parser_parse_function (parser_context_t *context_p, /**< context */
                                     &context_p->token.lit_location,
                                     LEXER_IDENT_LITERAL);
 
+#ifdef JERRY_DEBUGGER
+    if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+    {
+      jerry_debug_send_function_name ((jerry_char_t *) context_p->lit_object.literal_p->u.char_p,
+                                       context_p->lit_object.literal_p->prop.length);
+    }
+#endif /* JERRY_DEBUGGER */
+
     /* The arguments object is created later than the binding to the
      * function expression name, so there is no need to assign special flags. */
     if (context_p->lit_object.type != LEXER_LITERAL_OBJECT_ARGUMENTS)

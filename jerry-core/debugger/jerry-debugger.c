@@ -178,3 +178,13 @@ jerry_debug_send_source_file_name (const jerry_char_t *file_name_p, /**< file na
 {
   jerry_debug_send_string (JERRY_DEBUGGER_SOURCE_FILE_NAME, file_name_p, file_name_length);
 } /* jerry_debug_send_source_file_name */
+
+/**
+ * Send the function name to the client.
+ */
+void
+jerry_debug_send_function_name (const jerry_char_t *function_name_p, /**< function name */
+                                size_t function_name_length) /**< length of function name */
+{
+  jerry_debug_send_string (JERRY_DEBUGGER_FUNCTION_NAME, function_name_p, function_name_length);
+} /* jerry_debug_send_function_name */
