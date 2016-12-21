@@ -20,6 +20,10 @@
 #include "jcontext.h"
 #include "js-parser-internal.h"
 
+#ifdef JERRY_DEBUGGER
+#include "jerry-debugger.h"
+#endif /*JERRY_DEBUGGER */
+
 /** \addtogroup parser Parser
  * @{
  *
@@ -1463,6 +1467,13 @@ parser_post_processing (parser_context_t *context_p) /**< context */
 
   compiled_code_p = (ecma_compiled_code_t *) parser_malloc (context_p, total_size);
 
+#ifdef JERRY_DEBUGGER
+  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+  {
+    jerry_debugger_send_function_cp (JERRY_DEBUGGER_BYTE_CODE_CPTR, compiled_code_p);
+  }
+#endif /* JERRY_DEBUGGER */
+
   byte_code_p = (uint8_t *) compiled_code_p;
   compiled_code_p->size = (uint16_t) (total_size >> JMEM_ALIGNMENT_LOG);
   compiled_code_p->refs = 1;
@@ -2027,8 +2038,8 @@ parser_parse_function (parser_context_t *context_p, /**< context */
 #ifdef JERRY_DEBUGGER
     if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
     {
-      jerry_debug_send_function_name ((jerry_char_t *) context_p->lit_object.literal_p->u.char_p,
-                                       context_p->lit_object.literal_p->prop.length);
+      jerry_debugger_send_function_name ((jerry_char_t *) context_p->lit_object.literal_p->u.char_p,
+                                         context_p->lit_object.literal_p->prop.length);
     }
 #endif /* JERRY_DEBUGGER */
 
@@ -2048,6 +2059,13 @@ parser_parse_function (parser_context_t *context_p, /**< context */
 
     lexer_next_token (context_p);
   }
+
+#ifdef JERRY_DEBUGGER
+  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+  {
+    jerry_debugger_send_type (JERRY_DEBUGGER_PARSE_FUNCTION);
+  }
+#endif /* JERRY_DEBUGGER */
 
   if (context_p->token.type != LEXER_LEFT_PAREN)
   {
@@ -2274,6 +2292,13 @@ parser_parse_script (const uint8_t *source_p, /**< source code */
 
   if (!*bytecode_data_p)
   {
+#ifdef JERRY_DEBUGGER
+    if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+    {
+      jerry_debugger_send_type (JERRY_DEBUGGER_PARSE_ERROR);
+    }
+#endif /* JERRY_DEBUGGER */
+
     if (parser_error.error == PARSER_ERR_OUT_OF_MEMORY)
     {
       /* It is unlikely that memory can be allocated in an out-of-memory
