@@ -107,7 +107,7 @@ void jerry_debugger_connection_end ()
 } /* jerry_debugger_connection_end */
 
 /*
- * Send the parsed file names to the client side
+ * Send the message to the client side
  *
  * @return true - if the data was send successfully to the client side
  *         false - otherwise.
@@ -132,25 +132,22 @@ bool jerry_debugger_send (size_t data_len) /**< data length */
  * Send string to the client.
  */
 static void
-jerry_debug_send_string (uint8_t message_type, /**< message type */
-                         const jerry_char_t *string_p, /**< content string */
-                         size_t string_length) /**< length of content string */
+jerry_debugger_send_string (uint8_t message_type, /**< message type */
+                            const jerry_char_t *string_p, /**< content string */
+                            size_t string_length) /**< length of content string */
 {
-  if (!(JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER))
-  {
-    return;
-  }
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
 
   const size_t max_fragment_len = JERRY_DEBUGGER_MAX_SIZE (char);
 
-  JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->header.type = message_type;
-  JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->header.size = (uint8_t) max_fragment_len;
+  JERRY_DEBUGGER_MESSAGE (jerry_debugger_message_string_t, message_string_p);
+
+  message_string_p->header.type = message_type;
+  message_string_p->header.size = (uint8_t) max_fragment_len;
 
   while (string_length > max_fragment_len)
   {
-    memcpy (JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->string,
-            string_p,
-            max_fragment_len);
+    memcpy (message_string_p->string, string_p, max_fragment_len);
 
     jerry_debugger_send (sizeof (jerry_debugger_message_string_t));
 
@@ -158,33 +155,73 @@ jerry_debug_send_string (uint8_t message_type, /**< message type */
     string_p += max_fragment_len;
   }
 
-  JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->header.type = (uint8_t) (message_type + 1);
-  JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->header.size = (uint8_t) string_length;
+  message_string_p->header.size = (uint8_t) string_length;
 
-  memcpy (JERRY_DEBUGGER_BUFFER_AS (jerry_debugger_message_string_t)->string,
-          string_p,
-          string_length);
+  memcpy (message_string_p->string, string_p, string_length);
 
   jerry_debugger_send (sizeof (jerry_debugger_message_header_t) + string_length);
-} /* jerry_debug_send_string */
+} /* jerry_debugger_send_string */
 
 
 /**
  * Send the file name of the source code to the client.
  */
 void
-jerry_debug_send_source_file_name (const jerry_char_t *file_name_p, /**< file name */
-                                   size_t file_name_length) /**< length of file name */
+jerry_debugger_send_source_file_name (const jerry_char_t *file_name_p, /**< file name */
+                                      size_t file_name_length) /**< length of file name */
 {
-  jerry_debug_send_string (JERRY_DEBUGGER_SOURCE_FILE_NAME, file_name_p, file_name_length);
-} /* jerry_debug_send_source_file_name */
+  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+  {
+    jerry_debugger_send_string (JERRY_DEBUGGER_SOURCE_FILE_NAME, file_name_p, file_name_length);
+  }
+} /* jerry_debugger_send_source_file_name */
 
 /**
  * Send the function name to the client.
  */
 void
-jerry_debug_send_function_name (const jerry_char_t *function_name_p, /**< function name */
-                                size_t function_name_length) /**< length of function name */
+jerry_debugger_send_function_name (const jerry_char_t *function_name_p, /**< function name */
+                                   size_t function_name_length) /**< length of function name */
 {
-  jerry_debug_send_string (JERRY_DEBUGGER_FUNCTION_NAME, function_name_p, function_name_length);
-} /* jerry_debug_send_function_name */
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
+  jerry_debugger_send_string (JERRY_DEBUGGER_FUNCTION_NAME, function_name_p, function_name_length);
+} /* jerry_debugger_send_function_name */
+
+/**
+ * Send the type signal to the client.
+ */
+void
+jerry_debugger_send_type (jerry_debugger_header_type_t type) /**< message type */
+{
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
+  JERRY_DEBUGGER_MESSAGE (jerry_debugger_message_header_t, message_header_p);
+
+  message_header_p->type = (uint8_t) type;
+  message_header_p->size = 0;
+
+  jerry_debugger_send (sizeof (jerry_debugger_message_header_t));
+} /* jerry_debugger_send_type */
+
+/**
+ * Send the function compressed pointer to the client.
+ */
+void
+jerry_debugger_send_function_cp (jerry_debugger_header_type_t type, /**< message type */
+                                 ecma_compiled_code_t *compiled_code_p) /**< byte code pointer */
+{
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
+  JERRY_DEBUGGER_MESSAGE (jerry_debugger_byte_code_cptr_t, byte_code_cptr_p);
+
+  byte_code_cptr_p->header.type = (uint8_t) type;
+  byte_code_cptr_p->header.size = sizeof (jmem_cpointer_t);
+
+  jmem_cpointer_t compiled_code_cp;
+  JMEM_CP_SET_NON_NULL_POINTER (compiled_code_cp, compiled_code_p);
+
+  memcpy (byte_code_cptr_p->byte_code_cp, &compiled_code_cp, sizeof (jmem_cpointer_t));
+
+  jerry_debugger_send (sizeof (jerry_debugger_byte_code_cptr_t));
+} /* jerry_debugger_send_function_cp */
