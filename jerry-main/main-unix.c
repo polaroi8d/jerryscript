@@ -666,7 +666,7 @@ main (int argc,
        * Send the source file name to the client
        */
 #ifdef JERRY_DEBUGGER
-      jerry_debug_send_source_file_name ((jerry_char_t *) file_names[i], strlen (file_names[i]));
+      jerry_debugger_send_source_file_name ((jerry_char_t *) file_names[i], strlen (file_names[i]));
 #endif /* JERRY_DEBUGGER */
 
       if (source_p == NULL)

@@ -23,6 +23,11 @@
 #include "byte-code.h"
 #include "re-compiler.h"
 
+#ifdef JERRY_DEBUGGER
+#include "jcontext.h"
+#include "jerry-debugger.h"
+#endif /*JERRY_DEBUGGER */
+
 /** \addtogroup ecma ECMA
  * @{
  *
@@ -1421,6 +1426,13 @@ ecma_bytecode_deref (ecma_compiled_code_t *bytecode_p) /**< byte code pointer */
 
   if (bytecode_p->status_flags & CBC_CODE_FLAGS_FUNCTION)
   {
+#ifdef JERRY_DEBUGGER
+    if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+    {
+      jerry_debugger_send_function_cp (JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR, bytecode_p);
+    }
+#endif /* JERRY_DEBUGGER */
+
     jmem_cpointer_t *literal_start_p = NULL;
     uint32_t literal_end;
     uint32_t const_literal_end;

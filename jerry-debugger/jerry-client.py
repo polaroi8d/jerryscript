@@ -19,27 +19,97 @@ import sys
 from struct import *
 
 # Define the debugger buffer types
-JERRY_DEBUGGER_BREAKPOINT_LIST = 1
-JERRY_DEBUGGER_BREAKPOINT_LIST_END = 2
-JERRY_DEBUGGER_FUNCTION_NAME = 3
-JERRY_DEBUGGER_FUNCTION_NAME_END = 4
-JERRY_DEBUGGER_SOURCE_FILE_NAME = 5
-JERRY_DEBUGGER_SOURCE_FILE_NAME_END = 6
-JERRY_DEBUGGER_UNIQUE_START_BYTE_CODE_CPTR = 7
+JERRY_DEBUGGER_PARSE_ERROR = 1
+JERRY_DEBUGGER_BYTE_CODE_CPTR = 2
+JERRY_DEBUGGER_PARSE_FUNCTION = 3
+JERRY_DEBUGGER_BREAKPOINT_LIST = 4
+JERRY_DEBUGGER_BREAKPOINT_LIST_END = 5
+JERRY_DEBUGGER_SOURCE_FILE_NAME = 6
+JERRY_DEBUGGER_FUNCTION_NAME = 7
+JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR = 8
 
 PORT = 5001
 MAX_BUFFER_SIZE = 64  # Need to be the same as the jerry debugger MAX_BUFFER_SIZE
 HOST = "localhost"
 
-def main():
+
+class JerryDebugger:
+
+    def __init__(self):
+        self.message_data = b''
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket.connect((HOST, PORT))
+
+    def __del__(self):
+        self.client_socket.close()
+
+    def get_message(self):
+        if self.message_data == None:
+            return None
+
+        while True:
+            if len(self.message_data) >= 2:
+                size = ord(self.message_data[1])
+
+                if len(self.message_data) >= size + 2:
+                    result = self.message_data[0:size + 2]
+                    self.message_data = self.message_data[size + 2:]
+                    return result
+
+            data = self.client_socket.recv(MAX_BUFFER_SIZE)
+            if not data:
+                self.message_data = None
+                return None
+
+            self.message_data += data
+
+def parse_source(debugger, data):
+
     source_name = ''
-    source_name_list = []
     function_name = ''
-    function_name_list = []
+
+    function_list = []
+    stack = [ {} ]
+
+    while True:
+        if data == None:
+            return
+
+        buffer_type = ord(data[0])
+        buffer_size = ord(data[1])
+
+        print('Buffer type: %d' % buffer_type)
+        print('Message size: %d' % buffer_size)
+
+        if buffer_type == JERRY_DEBUGGER_PARSE_ERROR:
+            return
+
+        if buffer_type == JERRY_DEBUGGER_SOURCE_FILE_NAME:
+            source_name += unpack('<%ds' % (buffer_size), data[2:buffer_size+2])[0]
+
+        elif buffer_type == JERRY_DEBUGGER_FUNCTION_NAME:
+            function_name += unpack('<%ds' % (buffer_size), data[2:buffer_size+2])[0]
+
+        elif buffer_type == JERRY_DEBUGGER_PARSE_FUNCTION:
+            stack.append( { 'name' : function_name, 'source' : source_name } )
+            function_name = ''
+
+        elif buffer_type == JERRY_DEBUGGER_BYTE_CODE_CPTR:
+            stack[-1]['cptr'] = data[2:buffer_size+2]
+            function_list.append(stack.pop())
+
+        if len(stack) == 0: #break the while loop if there is no more data
+            break;
+
+        data = debugger.get_message()
+
+    print(function_list)
+
+def main():
 
     try:
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket.connect((HOST, PORT))
+        debugger = JerryDebugger()
+
     except socket.error as error_msg:
         try:
             errno = error_msg.errno
@@ -48,52 +118,34 @@ def main():
             errno = error_msg[0]
             msg = error_msg[1]
         sys.exit('Failed to create the socket. Error: %d %s' % (errno, msg))
+
     print('Socket created on: %d' % (PORT))
 
     while True:
-        data = client_socket.recv(MAX_BUFFER_SIZE)
+        data = debugger.get_message()
 
         if not data: #break the while loop if there is no more data
             break;
 
-        buffer_type, buffer_size = unpack('BB', data[:2])
-        print('Buffer type: %d' % buffer_type)
-        print('Message size: %d' % buffer_size)
+        buffer_type = ord(data[0])
+        buffer_size = ord(data[1])
 
-        if buffer_type == JERRY_DEBUGGER_SOURCE_FILE_NAME:
-            source_name_tmp = unpack('<%ds' % (buffer_size), data[2:buffer_size+2])
-            source_name += source_name_tmp[0]
+        print('main(): buffer type: %d' % buffer_type)
 
-            print('%s' % (source_name_tmp))
+        if buffer_type in [JERRY_DEBUGGER_PARSE_ERROR,
+                           JERRY_DEBUGGER_SOURCE_FILE_NAME,
+                           JERRY_DEBUGGER_FUNCTION_NAME,
+                           JERRY_DEBUGGER_PARSE_FUNCTION,
+                           JERRY_DEBUGGER_BYTE_CODE_CPTR]:
 
-        elif buffer_type == JERRY_DEBUGGER_SOURCE_FILE_NAME_END:
-            source_name_end = unpack('<%ds' % (buffer_size), data[2:buffer_size+2])
-            source_name += source_name_end[0]
+            parse_source(debugger, data)
 
-            print('%s' % (source_name_end))
-            print('Source %s file name parsed.' % (source_name))
-            source_name_list.append(source_name)
-            source_name = ''
-
-        elif buffer_type == JERRY_DEBUGGER_FUNCTION_NAME:
-            function_name_tmp = unpack('<%ds' % (buffer_size), data[2:buffer_size+2])
-            function_name += function_name_tmp[0]
-
-            print('%s' % (function_name_tmp))
-
-        elif buffer_type == JERRY_DEBUGGER_FUNCTION_NAME_END:
-            function_name_end = unpack('<%ds' % (buffer_size), data[2:buffer_size+2])
-            function_name += function_name_end[0]
-
-            print('%s' % (function_name_end))
-            print('Function %s parsed.' % (function_name))
-            function_name_list.append(function_name)
-            function_name = ''
+        elif buffer_type == JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR:
+            print("Free function")
+            print(data[2:buffer_size+2])
 
         else:
-            print("Feature implementation is processing...")
-
-    client_socket.close()
+            print("Feature implementation is in progress...")
 
 if __name__ == "__main__":
     main()
