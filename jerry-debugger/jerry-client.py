@@ -16,6 +16,8 @@
 
 import socket
 import sys
+import argparse
+import logging
 from struct import *
 from pprint import pprint # For the readable stack printing
 
@@ -32,6 +34,18 @@ JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR = 8
 PORT = 5001
 MAX_BUFFER_SIZE = 64  # Need to be the same as the jerry debugger MAX_BUFFER_SIZE
 HOST = "localhost"
+
+def arguments_parse():
+    parser = argparse.ArgumentParser(description='JerryScript debugger client.')
+
+    parser.add_argument('-v', '--verbose', action='store_true', help='increase verbosity (default: %(default)s)')
+
+    args = parser.parse_args()
+
+    if args.verbose:
+       logging.basicConfig(format='%(levelname)s: %(message)s' , level=logging.DEBUG)
+       logging.debug('Debug logging mode: ON')
+
 
 class JerryDebugger:
 
@@ -78,11 +92,10 @@ def parse_source(debugger, data):
         buffer_type = ord(data[0])
         buffer_size = ord(data[1])
 
-        # print('Buffer type: %d' % buffer_type)
-        # print('Message size: %d' % buffer_size)
+        logging.debug('PARSER_SOURCE: buffer type: %d, message size: %d' % (buffer_type, buffer_size))
 
         if buffer_type == JERRY_DEBUGGER_PARSE_ERROR:
-            # Parser error
+            logging.error('Parser error!')
             return
 
         if buffer_type == JERRY_DEBUGGER_SOURCE_FILE_NAME:
@@ -92,20 +105,22 @@ def parse_source(debugger, data):
             function_name += unpack('<%ds' % (buffer_size), data[2:buffer_size+2])[0]
 
         elif buffer_type == JERRY_DEBUGGER_PARSE_FUNCTION:
+            logging.debug('Source name: %s, function name: %s' % (source_name, function_name))
             stack.append( { 'name' : function_name, 'source' : source_name } )
             function_name = ''
 
         elif buffer_type == JERRY_DEBUGGER_BYTE_CODE_CPTR:
             cptr_key = data[2:buffer_size+2]
+            logging.debug('Byte code cptr recieved: {%s}' % (cptr_key))
             stack[-1]['cptr'] = cptr_key
             new_function_list[cptr_key] = stack.pop()
 
         else:
-            #  Parser error
+            logging.error('Parser error!')
             return
 
         if len(stack) == 0: # Break the while loop if there is no more data in the stack
-            # Empty stack
+            logging.debug('Empty stack.')
             break;
 
         data = debugger.get_message()
@@ -115,9 +130,10 @@ def parse_source(debugger, data):
 
 def release_source(debugger, data, buffer_size):
     del debugger.function_list[data[2:buffer_size+2]]
-    # print('Function <%s> bytecode released' % data[2:buffer_size+2])
+    logging.debug('Function {%s} bytecode released' % data[2:buffer_size+2])
 
 def main():
+    arguments_parse()
 
     try:
         debugger = JerryDebugger()
@@ -131,7 +147,7 @@ def main():
             msg = error_msg[1]
         sys.exit('Failed to create the socket. Error: %d %s' % (errno, msg))
 
-    # print('Socket created on: %d' % (PORT))
+    logging.debug('Socket created on: %d' % (PORT))
 
     while True:
 
@@ -143,7 +159,7 @@ def main():
         buffer_type = ord(data[0])
         buffer_size = ord(data[1])
 
-        # print('Buffer type: %d and the size: %d' %  (buffer_type, buffer_size))
+        logging.debug('MAIN buffer type: %d, message size: %d' % (buffer_type, buffer_size))
 
         if buffer_type in [JERRY_DEBUGGER_PARSE_ERROR,
                            JERRY_DEBUGGER_SOURCE_FILE_NAME,
@@ -156,10 +172,10 @@ def main():
             release_source(debugger, data, buffer_size)
 
         else:
-            print('Feature implementation is in progress...')
+            logging.debug('Feature implementation is in progress...')
 
-    # print('Main debugger function list:')
-    # pprint(debugger.function_list)
+    logging.debug('Main debugger function list:')
+    logging.debug(debugger.function_list)
 
 if __name__ == "__main__":
     main()
