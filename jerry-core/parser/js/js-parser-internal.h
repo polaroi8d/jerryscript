@@ -23,6 +23,10 @@
 #include "js-parser-limits.h"
 #include "js-lexer.h"
 
+#ifdef JERRY_DEBUGGER
+#include "jerry-debugger.h"
+#endif /* JERRY_DEBUGGER */
+
 /** \addtogroup parser Parser
  * @{
  *
@@ -190,6 +194,16 @@ typedef struct parser_branch_node_t
   parser_branch_t branch;                     /**< branch */
 } parser_branch_node_t;
 
+#ifdef JERRY_DEBUGGER
+/**
+ * Extra information for each breakpoint
+ */
+typedef struct parser_breakpoint_info_t
+{
+  parser_line_counter_t line;                 /**< line index of the breakpoint */
+} parser_breakpoint_info_t;
+#endif /* JERRY_DEBUGGER */
+
 /**
  * Those members of a context which needs
  * to be saved when a sub-function is parsed.
@@ -272,7 +286,9 @@ typedef struct
 #endif /* PARSER_DUMP_BYTE_CODE */
 
 #ifdef JERRY_DEBUGGER
-  parser_line_counter_t last_breakpoint_line;  /**< last line where breakpoint was inserted */
+  parser_breakpoint_info_t breakpoint_info[JERRY_DEBUGGER_MAX_SIZE(parser_list_t)]; /**< extra data for each breakpoint */
+  uint16_t breakpoint_info_count; /**< current breakpoint index */
+  parser_line_counter_t last_breakpoint_line; /**< last line where breakpoint was inserted */
 #endif /* JERRY_DEBUGGER */
 } parser_context_t;
 
@@ -431,6 +447,15 @@ ecma_compiled_code_t *parser_parse_function (parser_context_t *context_p, uint32
 /* Error management. */
 
 void parser_raise_error (parser_context_t *context_p, parser_error_t error);
+
+/* Debug functions. */
+
+#ifdef JERRY_DEBUGGER
+
+void parser_append_breakpoint_info (parser_context_t *context_p, parser_line_counter_t line);
+void parser_send_breakpoints (parser_context_t *context_p);
+
+#endif /* JERRY_DEBUGGER */
 
 /**
  * @}
