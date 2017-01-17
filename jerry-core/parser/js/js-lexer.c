@@ -21,6 +21,10 @@
 #include "js-parser-internal.h"
 #include "lit-char-helpers.h"
 
+#ifdef JERRY_DEBUGGER
+ #include "jcontext.h"
+#endif /* JERRY_DEBUGGER */
+
 /** \addtogroup parser Parser
  * @{
  *
@@ -1637,6 +1641,10 @@ lexer_construct_function_object (parser_context_t *context_p, /**< context */
   compiled_code_p = parser_parse_function (context_p, extra_status_flags);
 
   literal_p->u.bytecode_p = compiled_code_p;
+
+#ifdef JERRY_DEBUGGER
+  JMEM_CP_SET_NON_NULL_POINTER (jerry_global_context.debug_func_bytecode_data_cp, compiled_code_p);
+#endif /* JERRY_DEBUGGER */
 
   literal_p->type = LEXER_FUNCTION_LITERAL;
   context_p->status_flags |= PARSER_NO_REG_STORE;
