@@ -26,7 +26,6 @@ JERRY_DEBUGGER_PARSE_ERROR = 1
 JERRY_DEBUGGER_BYTE_CODE_CPTR = 2
 JERRY_DEBUGGER_PARSE_FUNCTION = 3
 JERRY_DEBUGGER_BREAKPOINT_LIST = 4
-JERRY_DEBUGGER_BREAKPOINT_LIST_END = 5
 JERRY_DEBUGGER_SOURCE_FILE_NAME = 6
 JERRY_DEBUGGER_FUNCTION_NAME = 7
 JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR = 8
@@ -45,7 +44,6 @@ def arguments_parse():
     if args.verbose:
        logging.basicConfig(format='%(levelname)s: %(message)s' , level=logging.DEBUG)
        logging.debug('Debug logging mode: ON')
-
 
 class JerryDebugger:
 
@@ -82,7 +80,7 @@ def parse_source(debugger, data):
 
     source_name = ''
     function_name = ''
-    stack = [{}]
+    stack = [{ 'lines' : [] }]
     new_function_list = {}
 
     while True:
@@ -106,8 +104,18 @@ def parse_source(debugger, data):
 
         elif buffer_type == JERRY_DEBUGGER_PARSE_FUNCTION:
             logging.debug('Source name: %s, function name: %s' % (source_name, function_name))
-            stack.append( { 'name' : function_name, 'source' : source_name } )
+            stack.append( { 'name' : function_name, 'source' : source_name, 'lines' : [] } )
             function_name = ''
+
+        elif buffer_type == JERRY_DEBUGGER_BREAKPOINT_LIST:
+            logging.debug('Breakpoints')
+
+            buffer_pos = 2
+            while buffer_size > 0:
+                line = unpack('<I', data[buffer_pos:buffer_pos+4])[0]
+                stack[-1]['lines'].append(line)
+                buffer_pos += 4
+                buffer_size -= 4
 
         elif buffer_type == JERRY_DEBUGGER_BYTE_CODE_CPTR:
             cptr_key = data[2:buffer_size+2]
