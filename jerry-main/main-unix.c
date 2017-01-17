@@ -23,10 +23,6 @@
 #include "jerry-port.h"
 #include "jerry-port-default.h"
 
-#ifdef JERRY_DEBUGGER
-#include "jerry-debugger.h"
-#endif /* JERRY_DEBUGGER */
-
 /**
  * Maximum command line arguments number
  */

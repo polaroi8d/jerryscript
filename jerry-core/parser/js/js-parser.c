@@ -20,10 +20,6 @@
 #include "jcontext.h"
 #include "js-parser-internal.h"
 
-#ifdef JERRY_DEBUGGER
-#include "jerry-debugger.h"
-#endif /*JERRY_DEBUGGER */
-
 /** \addtogroup parser Parser
  * @{
  *
@@ -1274,6 +1270,14 @@ parser_post_processing (parser_context_t *context_p) /**< context */
 
   JERRY_ASSERT (context_p->literal_count <= PARSER_MAXIMUM_NUMBER_OF_LITERALS);
 
+#ifdef JERRY_DEBUGGER
+    if ((JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+        && context_p->breakpoint_info_count > 0)
+    {
+      parser_send_breakpoints (context_p);
+    }
+#endif /* JERRY_DEBUGGER */
+
   initializers_length = parser_compute_indicies (context_p,
                                                  &ident_end,
                                                  &uninitialized_var_end,
@@ -1872,7 +1876,8 @@ parser_parse_source (const uint8_t *source_p, /**< valid UTF-8 source code */
 #endif /* PARSER_DUMP_BYTE_CODE */
 
 #ifdef JERRY_DEBUGGER
-  context.last_breakpoint_line = 0; /**< last line where breapoint was inserted */
+  context.breakpoint_info_count = 0;
+  context.last_breakpoint_line = 0;
 #endif /* JERRY_DEBUGGER */
 
   PARSER_TRY (context.try_buffer)
@@ -1962,6 +1967,15 @@ parser_parse_function (parser_context_t *context_p, /**< context */
 
   JERRY_ASSERT (context_p->last_cbc_opcode == PARSER_CBC_UNAVAILABLE);
 
+#ifdef JERRY_DEBUGGER
+    if ((JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+        && context_p->breakpoint_info_count > 0)
+    {
+      parser_send_breakpoints (context_p);
+      context_p->breakpoint_info_count = 0;
+    }
+#endif /* JERRY_DEBUGGER */
+
   /* Save private part of the context. */
 
   saved_context.status_flags = context_p->status_flags;
@@ -2020,6 +2034,9 @@ parser_parse_function (parser_context_t *context_p, /**< context */
       JERRY_DEBUG_MSG ("Insert function breakpoint: %d (%d)\n", context_p->line, context_p->last_breakpoint_line);
       parser_emit_cbc (context_p, CBC_BREAKPOINT_DISABLED);
       parser_flush_cbc (context_p);
+
+      parser_append_breakpoint_info (context_p, context_p->line);
+
       context_p->last_breakpoint_line = context_p->line;
     }
   }
@@ -2264,6 +2281,44 @@ parser_raise_error (parser_context_t *context_p, /**< context */
   /* Should never been reached. */
   JERRY_ASSERT (0);
 } /* parser_raise_error */
+
+#ifdef JERRY_DEBUGGER
+
+/**
+ * Append a breakpoint info
+ */
+void
+parser_append_breakpoint_info (parser_context_t *context_p, /**< context */
+                               parser_line_counter_t line) /* line of breakpoint */
+{
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
+  if (context_p->breakpoint_info_count >= JERRY_DEBUGGER_MAX_SIZE(parser_list_t))
+  {
+    parser_send_breakpoints (context_p);
+  }
+
+  context_p->breakpoint_info[context_p->breakpoint_info_count].line = line;
+  context_p->breakpoint_info_count = (uint16_t) (context_p->breakpoint_info_count + 1);
+}
+
+/**
+ * Send current breakpoint list
+ */
+void
+parser_send_breakpoints (parser_context_t *context_p) /**< context */
+{
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+  JERRY_ASSERT (context_p->breakpoint_info_count > 0);
+
+  jerry_debugger_send_data (JERRY_DEBUGGER_BREAKPOINT_LIST,
+                            context_p->breakpoint_info,
+                            context_p->breakpoint_info_count * sizeof (parser_breakpoint_info_t));
+
+  context_p->breakpoint_info_count = 0;
+} /* parser_send_breakpoints */
+
+#endif /* JERRY_DEBUGGER */
 
 #define PARSE_ERR_POS_START       " [line: "
 #define PARSE_ERR_POS_START_SIZE  ((uint32_t) sizeof (PARSE_ERR_POS_START) - 1)

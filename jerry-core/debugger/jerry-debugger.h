@@ -25,7 +25,7 @@ extern uint8_t jerry_debugger_buffer[MAX_BUFFER_SIZE];
 
 extern bool jerry_debugger_socket_init (void);
 extern void jerry_debugger_connection_end (void);
-extern bool jerry_debugger_send (size_t data_len);
+extern bool jerry_debugger_send (size_t data_size);
 
 /**
  * Limited resources available for the engine, so it is important to
@@ -62,8 +62,6 @@ typedef enum
   JERRY_DEBUGGER_BYTE_CODE_CPTR = 2,                  /**< byte code compressed pointer */
   JERRY_DEBUGGER_PARSE_FUNCTION = 3,                  /**< parsing a new function */
   JERRY_DEBUGGER_BREAKPOINT_LIST = 4,                 /**< there is more piece of the breakpoint list */
-  JERRY_DEBUGGER_BREAKPOINT_LIST_END = 5,             /**< the last piece of the breakpoint list
-                                                       *   or when one buffer send is enough for the engine */
   JERRY_DEBUGGER_SOURCE_FILE_NAME = 6,                /**< source file name fragment */
   JERRY_DEBUGGER_FUNCTION_NAME = 7,                   /**< function name fragment */
   JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR = 8,             /**< invalidate byte code compressed pointer */
@@ -116,6 +114,7 @@ typedef struct
 } jerry_debugger_breakpoint_list_t;
 
 extern void jerry_debugger_send_type (jerry_debugger_header_type_t type);
+extern void jerry_debugger_send_data (jerry_debugger_header_type_t type, const void *data, size_t size);
 extern void jerry_debugger_send_function_name (const jerry_char_t *function_name_p, size_t function_name_length);
 extern void jerry_debugger_send_function_cp (jerry_debugger_header_type_t type, ecma_compiled_code_t *compiled_code_p);
 extern void jerry_debugger_send_source_file_name (const jerry_char_t *file_name_p, size_t file_name_length);

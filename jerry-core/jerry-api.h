@@ -296,7 +296,7 @@ jerry_value_t jerry_exec_snapshot (const void *, size_t, bool);
 /**
  * Debugger functions
  */
-void jerry_debug_send_source_file_name (const jerry_char_t *, size_t);
+void jerry_debugger_send_source_file_name (const jerry_char_t *, size_t);
 #endif /* JERRY_DEBUGGER */
 
 /**
