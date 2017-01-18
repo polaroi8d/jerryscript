@@ -26,9 +26,10 @@ JERRY_DEBUGGER_PARSE_ERROR = 1
 JERRY_DEBUGGER_BYTE_CODE_CPTR = 2
 JERRY_DEBUGGER_PARSE_FUNCTION = 3
 JERRY_DEBUGGER_BREAKPOINT_LIST = 4
-JERRY_DEBUGGER_SOURCE_FILE_NAME = 5
-JERRY_DEBUGGER_FUNCTION_NAME = 6
-JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR = 7
+JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 5
+JERRY_DEBUGGER_SOURCE_FILE_NAME = 6
+JERRY_DEBUGGER_FUNCTION_NAME = 7
+JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR = 8
 
 PORT = 5001
 MAX_BUFFER_SIZE = 64  # Need to be the same as the jerry debugger MAX_BUFFER_SIZE
@@ -80,7 +81,7 @@ def parse_source(debugger, data):
 
     source_name = ''
     function_name = ''
-    stack = [{ 'lines' : [] }]
+    stack = [{ 'lines' : [], 'offsets' : []}]
     new_function_list = {}
 
     while True:
@@ -104,16 +105,20 @@ def parse_source(debugger, data):
 
         elif buffer_type == JERRY_DEBUGGER_PARSE_FUNCTION:
             logging.debug('Source name: %s, function name: %s' % (source_name, function_name))
-            stack.append( { 'name' : function_name, 'source' : source_name, 'lines' : [] } )
+            stack.append( { 'name' : function_name, 'source' : source_name, 'lines' : [], 'offsets' : [] } )
             function_name = ''
 
-        elif buffer_type == JERRY_DEBUGGER_BREAKPOINT_LIST:
-            logging.debug('Breakpoints')
+        elif buffer_type in [JERRY_DEBUGGER_BREAKPOINT_LIST, JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST]:
+            name = 'lines'
+            if buffer_type == JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST:
+                name = 'offsets'
+
+            logging.debug('Breakpoint %s received' % (name))
 
             buffer_pos = 2
             while buffer_size > 0:
                 line = unpack('<I', data[buffer_pos:buffer_pos+4])[0]
-                stack[-1]['lines'].append(line)
+                stack[-1][name].append(line)
                 buffer_pos += 4
                 buffer_size -= 4
 
@@ -121,6 +126,7 @@ def parse_source(debugger, data):
             cptr_key = data[2:buffer_size+2]
             logging.debug('Byte code cptr recieved: {%s}' % (cptr_key))
             stack[-1]['cptr'] = cptr_key
+            print(stack[-1])
             new_function_list[cptr_key] = stack.pop()
 
         else:

@@ -200,7 +200,7 @@ typedef struct parser_branch_node_t
  */
 typedef struct parser_breakpoint_info_t
 {
-  parser_line_counter_t line;                 /**< line index of the breakpoint */
+  uint32_t value;                             /**< line or offset of the breakpoint */
 } parser_breakpoint_info_t;
 #endif /* JERRY_DEBUGGER */
 
@@ -452,8 +452,8 @@ void parser_raise_error (parser_context_t *context_p, parser_error_t error);
 
 #ifdef JERRY_DEBUGGER
 
-void parser_append_breakpoint_info (parser_context_t *context_p, parser_line_counter_t line);
-void parser_send_breakpoints (parser_context_t *context_p);
+void parser_append_breakpoint_info (parser_context_t *context_p, jerry_debugger_header_type_t type, uint32_t value);
+void parser_send_breakpoints (parser_context_t *context_p, jerry_debugger_header_type_t type);
 
 #endif /* JERRY_DEBUGGER */
 
