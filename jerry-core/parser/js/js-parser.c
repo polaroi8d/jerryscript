@@ -1279,7 +1279,8 @@ parser_post_processing (parser_context_t *context_p) /**< context */
   if ((JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
       && context_p->breakpoint_info_count > 0)
   {
-    parser_send_breakpoints (context_p);
+    parser_send_breakpoints (context_p, JERRY_DEBUGGER_BREAKPOINT_LIST);
+    JERRY_ASSERT (context_p->breakpoint_info_count == 0);
   }
 #endif /* JERRY_DEBUGGER */
 
@@ -1476,13 +1477,6 @@ parser_post_processing (parser_context_t *context_p) /**< context */
 
   compiled_code_p = (ecma_compiled_code_t *) parser_malloc (context_p, total_size);
 
-#ifdef JERRY_DEBUGGER
-  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
-  {
-    jerry_debugger_send_function_cp (JERRY_DEBUGGER_BYTE_CODE_CPTR, compiled_code_p);
-  }
-#endif /* JERRY_DEBUGGER */
-
   byte_code_p = (uint8_t *) compiled_code_p;
   compiled_code_p->size = (uint16_t) (total_size >> JMEM_ALIGNMENT_LOG);
   compiled_code_p->refs = 1;
@@ -1592,6 +1586,14 @@ parser_post_processing (parser_context_t *context_p) /**< context */
     PARSER_NEXT_BYTE_UPDATE (page_p, offset, real_offset);
     flags = cbc_flags[opcode];
 
+#ifdef JERRY_DEBUGGER
+    if (opcode == CBC_BREAKPOINT_DISABLED)
+    {
+      uint32_t offset = (uint32_t) (((uint8_t*) dst_p) - ((uint8_t*) compiled_code_p) - 1);
+      parser_append_breakpoint_info (context_p, JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST, offset);
+    }
+#endif /* JERRY_DEBUGGER */
+
     if (opcode == CBC_EXT_OPCODE)
     {
       cbc_ext_opcode_t ext_opcode;
@@ -1686,6 +1688,15 @@ parser_post_processing (parser_context_t *context_p) /**< context */
       PARSER_NEXT_BYTE_UPDATE (page_p, offset, real_offset);
     }
   }
+
+#ifdef JERRY_DEBUGGER
+  if ((JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+      && context_p->breakpoint_info_count > 0)
+  {
+    parser_send_breakpoints (context_p, JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST);
+    JERRY_ASSERT (context_p->breakpoint_info_count == 0);
+  }
+#endif /* JERRY_DEBUGGER */
 
   if (!(context_p->status_flags & PARSER_NO_END_LABEL))
   {
@@ -1788,6 +1799,13 @@ parser_post_processing (parser_context_t *context_p) /**< context */
     ECMA_SET_NON_NULL_POINTER (literal_pool_p[const_literal_end],
                                compiled_code_p);
   }
+
+#ifdef JERRY_DEBUGGER
+  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+  {
+    jerry_debugger_send_function_cp (JERRY_DEBUGGER_BYTE_CODE_CPTR, compiled_code_p);
+  }
+#endif /* JERRY_DEBUGGER */
 
   return compiled_code_p;
 } /* parser_post_processing */
@@ -1976,7 +1994,7 @@ parser_parse_function (parser_context_t *context_p, /**< context */
   if ((JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
       && context_p->breakpoint_info_count > 0)
   {
-    parser_send_breakpoints (context_p);
+    parser_send_breakpoints (context_p, JERRY_DEBUGGER_BREAKPOINT_LIST);
     context_p->breakpoint_info_count = 0;
   }
 #endif /* JERRY_DEBUGGER */
@@ -2040,7 +2058,7 @@ parser_parse_function (parser_context_t *context_p, /**< context */
       parser_emit_cbc (context_p, CBC_BREAKPOINT_DISABLED);
       parser_flush_cbc (context_p);
 
-      parser_append_breakpoint_info (context_p, context_p->line);
+      parser_append_breakpoint_info (context_p, JERRY_DEBUGGER_BREAKPOINT_LIST, context_p->line);
 
       context_p->last_breakpoint_line = context_p->line;
     }
@@ -2294,16 +2312,17 @@ parser_raise_error (parser_context_t *context_p, /**< context */
  */
 void
 parser_append_breakpoint_info (parser_context_t *context_p, /**< context */
-                               parser_line_counter_t line) /* line of breakpoint */
+                               jerry_debugger_header_type_t type, /**< message type */
+                               uint32_t value) /**< line or offset of the breakpoint */
 {
   JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
 
   if (context_p->breakpoint_info_count >= JERRY_DEBUGGER_MAX_SIZE (parser_list_t))
   {
-    parser_send_breakpoints (context_p);
+    parser_send_breakpoints (context_p, type);
   }
 
-  context_p->breakpoint_info[context_p->breakpoint_info_count].line = line;
+  context_p->breakpoint_info[context_p->breakpoint_info_count].value = value;
   context_p->breakpoint_info_count = (uint16_t) (context_p->breakpoint_info_count + 1);
 } /* parser_append_breakpoint_info */
 
@@ -2311,12 +2330,13 @@ parser_append_breakpoint_info (parser_context_t *context_p, /**< context */
  * Send current breakpoint list
  */
 void
-parser_send_breakpoints (parser_context_t *context_p) /**< context */
+parser_send_breakpoints (parser_context_t *context_p, /**< context */
+                         jerry_debugger_header_type_t type) /**< message type */
 {
   JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
   JERRY_ASSERT (context_p->breakpoint_info_count > 0);
 
-  jerry_debugger_send_data (JERRY_DEBUGGER_BREAKPOINT_LIST,
+  jerry_debugger_send_data (type,
                             context_p->breakpoint_info,
                             context_p->breakpoint_info_count * sizeof (parser_breakpoint_info_t));
 

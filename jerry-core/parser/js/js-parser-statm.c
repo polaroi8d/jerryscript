@@ -340,7 +340,7 @@ parser_parse_var_statement (parser_context_t *context_p) /**< context */
           parser_emit_cbc (context_p, CBC_BREAKPOINT_DISABLED);
           parser_flush_cbc (context_p);
 
-          parser_append_breakpoint_info (context_p, ident_line_counter);
+          parser_append_breakpoint_info (context_p, JERRY_DEBUGGER_BREAKPOINT_LIST, ident_line_counter);
 
           context_p->last_cbc_opcode = CBC_PUSH_LITERAL;
           context_p->last_cbc = last_cbc;
@@ -1710,7 +1710,7 @@ parser_parse_statements (parser_context_t *context_p) /**< context */
         parser_emit_cbc (context_p, CBC_BREAKPOINT_DISABLED);
         parser_flush_cbc (context_p);
 
-        parser_append_breakpoint_info (context_p, context_p->line);
+        parser_append_breakpoint_info (context_p, JERRY_DEBUGGER_BREAKPOINT_LIST, context_p->line);
 
         context_p->last_breakpoint_line = context_p->line;
       }
