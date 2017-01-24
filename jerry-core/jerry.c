@@ -152,19 +152,19 @@ jerry_init (jerry_init_flag_t flags) /**< combination of Jerry flags */
     flags |= JERRY_INIT_MEM_STATS;
   }
 
-#ifdef JERRY_DEBUGGER
-  if (flags & JERRY_INIT_DEBUGGER)
-  {
-    jerry_debugger_socket_init ();
-  }
-#endif /* JERRY_DEBUGGER */
-
   JERRY_CONTEXT (jerry_init_flags) = flags;
 
   jerry_make_api_available ();
 
   jmem_init ();
   ecma_init ();
+
+#ifdef JERRY_DEBUGGER
+  if (flags & JERRY_INIT_DEBUGGER)
+  {
+    jerry_debugger_socket_init ();
+  }
+#endif /* JERRY_DEBUGGER */
 } /* jerry_init */
 
 /**

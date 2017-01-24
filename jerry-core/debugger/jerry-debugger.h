@@ -1,4 +1,4 @@
-/* Copyright 2016 University of Szeged.
+/* Copyright JS Foundation and other contributors, http://js.foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,34 +19,40 @@
 #include "jmem-allocator.h"
 #include "ecma-globals.h"
 
-#define MAX_BUFFER_SIZE 64
+/* Jerry debugger protocol is the simplified version of RFC-6455 (WebSockets). */
 
-extern uint8_t jerry_debugger_buffer[MAX_BUFFER_SIZE];
+#define JERRY_DEBUGGER_MAX_BUFFER_SIZE 128
 
-extern bool jerry_debugger_socket_init (void);
-extern void jerry_debugger_connection_end (void);
-extern bool jerry_debugger_send (size_t data_size);
+#define JERRY_DEBUGGER_MESSAGE_FREQUENCY 5
+
+bool jerry_debugger_socket_init (void);
+void jerry_debugger_connection_end (void);
+bool jerry_debugger_send (const uint8_t *data_p, size_t data_size);
+
+void jerry_debugger_compute_sha1 (const uint8_t *input1, size_t input1_len,
+                                  const uint8_t *input2, size_t input2_len,
+                                  uint8_t output[20]);
 
 /**
  * Limited resources available for the engine, so it is important to
  * check the maximum buffer size. It need to be between 64 and 256.
  */
-#if MAX_BUFFER_SIZE < 64 || MAX_BUFFER_SIZE > 256
+#if JERRY_DEBUGGER_MAX_BUFFER_SIZE < 64 || JERRY_DEBUGGER_MAX_BUFFER_SIZE > 256
 #error "Please define the MAX_BUFFER_SIZE between 64 and 256."
-#endif /* MAX_BUFFER_SIZE < 64 || MAX_BUFFER_SIZE > 256 */
+#endif /* JERRY_DEBUGGER_MAX_BUFFER_SIZE < 64 || JERRY_DEBUGGER_MAX_BUFFER_SIZE > 256 */
 
 /**
  * Calculate how many source file name, function name and breakpoint
  * can send in one buffer without overflow.
  */
 #define JERRY_DEBUGGER_MAX_SIZE(type) \
- ((MAX_BUFFER_SIZE - sizeof (jerry_debugger_message_header_t)) / sizeof (type))
+ ((JERRY_DEBUGGER_MAX_BUFFER_SIZE - sizeof (jerry_debugger_message_header_t)) / sizeof (type))
 
 /**
  * Type cast the debugger buffer into a specific type.
  */
 #define JERRY_DEBUGGER_MESSAGE(type, name_p) \
-  type *name_p = ((type *) &jerry_debugger_buffer)
+  type *name_p = ((type *) &JERRY_CONTEXT (debugger_send_buffer))
 
 /**
  * Types for the package
@@ -73,8 +79,9 @@ typedef enum
  */
 typedef struct
 {
-  uint8_t type; /**< type of the message */
+  uint8_t ws_opcode; /**< websocket opcode */
   uint8_t size; /**< size of the message */
+  uint8_t type; /**< type of the message */
 } jerry_debugger_message_header_t;
 
 /**
@@ -114,10 +121,11 @@ typedef struct
   jerry_debugger_bp_pairs_t breakpoint_pairs[JERRY_DEBUGGER_MAX_SIZE (jerry_debugger_bp_pairs_t)];
 } jerry_debugger_breakpoint_list_t;
 
-extern void jerry_debugger_send_type (jerry_debugger_header_type_t type);
-extern void jerry_debugger_send_data (jerry_debugger_header_type_t type, const void *data, size_t size);
-extern void jerry_debugger_send_function_name (const jerry_char_t *function_name_p, size_t function_name_length);
-extern void jerry_debugger_send_function_cp (jerry_debugger_header_type_t type, ecma_compiled_code_t *compiled_code_p);
-extern void jerry_debugger_send_source_file_name (const jerry_char_t *file_name_p, size_t file_name_length);
+void jerry_debugger_receive (void);
+void jerry_debugger_send_type (jerry_debugger_header_type_t type);
+void jerry_debugger_send_data (jerry_debugger_header_type_t type, const void *data, size_t size);
+void jerry_debugger_send_function_name (const jerry_char_t *function_name_p, size_t function_name_length);
+void jerry_debugger_send_function_cp (jerry_debugger_header_type_t type, ecma_compiled_code_t *compiled_code_p);
+void jerry_debugger_send_source_file_name (const jerry_char_t *file_name_p, size_t file_name_length);
 
 #endif /* JERRY_DEBUGGER_H */

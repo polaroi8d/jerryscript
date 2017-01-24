@@ -25,6 +25,10 @@
 #include "re-bytecode.h"
 #include "vm-defines.h"
 
+#ifdef JERRY_DEBUGGER
+#include "jerry-debugger.h"
+#endif /*JERRY_DEBUGGER */
+
 /** \addtogroup context Context
  * @{
  */
@@ -81,6 +85,14 @@ typedef struct
 #ifndef CONFIG_DISABLE_REGEXP_BUILTIN
   uint8_t re_cache_idx; /**< evicted item index when regex cache is full (round-robin) */
 #endif /* !CONFIG_DISABLE_REGEXP_BUILTIN */
+
+#ifdef JERRY_DEBUGGER
+  uint32_t debugger_message_delay; /**< call receive message when reaches zero */
+  uint8_t debugger_send_buffer[JERRY_DEBUGGER_MAX_BUFFER_SIZE]; /**< buffer for sending messages */
+  uint8_t debugger_receive_buffer[JERRY_DEBUGGER_MAX_BUFFER_SIZE]; /**< buffer for receiving messages */
+  uint32_t debugger_receive_buffer_offset; /**< receive buffer offset */
+  int jerry_debugger_connection; /**< hold the file descriptor for socket communication */
+#endif /* JERRY_DEBUGGER */
 
 #ifdef JMEM_STATS
   jmem_heap_stats_t jmem_heap_stats; /**< heap's memory usage statistics */
