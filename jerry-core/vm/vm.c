@@ -2305,13 +2305,22 @@ vm_loop (vm_frame_ctx_t *frame_ctx_p) /**< frame context */
           continue;
         }
         case VM_OC_BREAKPOINT_ENABLED:
-        {
-          JERRY_ASSERT (opcode == CBC_BREAKPOINT_ENABLED);
-          continue;
-        }
         case VM_OC_BREAKPOINT_DISABLED:
         {
-          JERRY_ASSERT (opcode == CBC_BREAKPOINT_DISABLED);
+#ifdef JERRY_DEBUGGER
+          if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+          {
+            if (JERRY_CONTEXT(debugger_message_delay) == 0)
+            {
+              jerry_debugger_receive();
+              JERRY_CONTEXT(debugger_message_delay) = JERRY_DEBUGGER_MESSAGE_FREQUENCY;
+            }
+            else
+            {
+              JERRY_CONTEXT(debugger_message_delay)--;
+            }
+          }
+#endif /* JERRY_DEBUGGER */
           continue;
         }
         default:

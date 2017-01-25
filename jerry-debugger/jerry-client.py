@@ -53,9 +53,38 @@ class JerryDebugger:
         self.function_list = []
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect((HOST, PORT))
+        self.send_message(b'GET /jerry-debugger HTTP/1.1\r\n' +
+                          b'Upgrade: websocket\r\n' +
+                          b'Connection: Upgrade\r\n' +
+                          b'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n')
+        result = b''
+        expected = (b'HTTP/1.1 101 Switching Protocols\r\n' +
+                    b'Upgrade: websocket\r\n' +
+                    b'Connection: Upgrade\r\n' +
+                    b'Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n')
+
+        while len(result) < len(expected):
+            result += self.client_socket.recv(1024)
+
+        len_result = len(result)
+        len_expected = len(expected)
+
+        if result[0:len_expected] != expected:
+            raise Exception('Unexpected handshake')
+
+        if len_result > len_expected:
+            self.message_data = result[len_expected:]
 
     def __del__(self):
         self.client_socket.close()
+
+    def send_message(self, message):
+        size = len(message)
+        while size > 0:
+            bytes_send = self.client_socket.send(message)
+            if bytes_send < size:
+                message = message[bytes_send:]
+            size -= bytes_send
 
     def get_message(self):
         if self.message_data == None:
@@ -63,7 +92,12 @@ class JerryDebugger:
 
         while True:
             if len(self.message_data) >= 2:
+                if ord(self.message_data[0]) != 0x82:
+                    raise Exception('Unexpected data frame')
+
                 size = ord(self.message_data[1])
+                if size == 0 or size >= 126:
+                    raise Exception('Unexpected data frame')
 
                 if len(self.message_data) >= size + 2:
                     result = self.message_data[0:size + 2]
@@ -88,8 +122,8 @@ def parse_source(debugger, data):
         if data == None:
             return
 
-        buffer_type = ord(data[0])
-        buffer_size = ord(data[1])
+        buffer_type = ord(data[2])
+        buffer_size = ord(data[1]) - 1
 
         logging.debug('PARSER_SOURCE: buffer type: %d, message size: %d' % (buffer_type, buffer_size))
 
@@ -98,10 +132,10 @@ def parse_source(debugger, data):
             return
 
         if buffer_type == JERRY_DEBUGGER_SOURCE_FILE_NAME:
-            source_name += unpack('<%ds' % (buffer_size), data[2:buffer_size+2])[0]
+            source_name += unpack('<%ds' % (buffer_size), data[3:buffer_size+3])[0]
 
         elif buffer_type == JERRY_DEBUGGER_FUNCTION_NAME:
-            function_name += unpack('<%ds' % (buffer_size), data[2:buffer_size+2])[0]
+            function_name += unpack('<%ds' % (buffer_size), data[3:buffer_size+3])[0]
 
         elif buffer_type == JERRY_DEBUGGER_PARSE_FUNCTION:
             logging.debug('Source name: %s, function name: %s' % (source_name, function_name))
@@ -115,7 +149,7 @@ def parse_source(debugger, data):
 
             logging.debug('Breakpoint %s received' % (name))
 
-            buffer_pos = 2
+            buffer_pos = 3
             while buffer_size > 0:
                 line = unpack('<I', data[buffer_pos:buffer_pos+4])[0]
                 stack[-1][name].append(line)
@@ -123,7 +157,7 @@ def parse_source(debugger, data):
                 buffer_size -= 4
 
         elif buffer_type == JERRY_DEBUGGER_BYTE_CODE_CPTR:
-            cptr_key = data[2:buffer_size+2]
+            cptr_key = data[3:buffer_size+3]
             logging.debug('Byte code cptr recieved: {%s}' % (cptr_key))
             stack[-1]['cptr'] = cptr_key
             print(stack[-1])
@@ -143,8 +177,8 @@ def parse_source(debugger, data):
     debugger.function_list = new_function_list # Copy the ready list to the global storage
 
 def release_source(debugger, data, buffer_size):
-    del debugger.function_list[data[2:buffer_size+2]]
-    logging.debug('Function {%s} bytecode released' % data[2:buffer_size+2])
+    del debugger.function_list[data[3:buffer_size+3]]
+    logging.debug('Function {%s} bytecode released' % data[3:buffer_size+3])
 
 def main():
     arguments_parse()
@@ -170,8 +204,8 @@ def main():
         if not data: # Break the while loop if there is no more data
             break;
 
-        buffer_type = ord(data[0])
-        buffer_size = ord(data[1])
+        buffer_type = ord(data[2])
+        buffer_size = ord(data[1]) - 1
 
         logging.debug('MAIN buffer type: %d, message size: %d' % (buffer_type, buffer_size))
 
