@@ -309,7 +309,7 @@ bool jerry_debugger_socket_init ()
 
   jerry_port_log (JERRY_LOG_LEVEL_DEBUG, "Waiting for the client connection.\n");
 
-  if ((JERRY_CONTEXT (jerry_debugger_connection) = accept (server_socket, (struct sockaddr *)&addr, &sin_size)) == -1)
+  if ((JERRY_CONTEXT (debugger_connection) = accept (server_socket, (struct sockaddr *)&addr, &sin_size)) == -1)
   {
     close (server_socket);
     jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Error: %s\n", strerror (errno));
@@ -323,7 +323,7 @@ bool jerry_debugger_socket_init ()
 
   JMEM_DEFINE_LOCAL_ARRAY (request_buffer_p, request_buffer_size, uint8_t);
 
-  is_handshake_ok = jerry_process_handshake (JERRY_CONTEXT (jerry_debugger_connection),
+  is_handshake_ok = jerry_process_handshake (JERRY_CONTEXT (debugger_connection),
                                              request_buffer_p,
                                              request_buffer_size);
 
@@ -331,22 +331,41 @@ bool jerry_debugger_socket_init ()
 
   if (!is_handshake_ok)
   {
-    close (JERRY_CONTEXT (jerry_debugger_connection));
+    close (JERRY_CONTEXT (debugger_connection));
     return false;
   }
 
-  int socket_flags = fcntl (JERRY_CONTEXT (jerry_debugger_connection), F_GETFL, 0);
+  JERRY_DEBUGGER_MESSAGE (jerry_debugger_message_configuration_t, configuration_p);
+
+  union
+  {
+    uint16_t uint16_value; /**< a 16 bit value */
+    uint8_t uint8_value[2]; /**< lower and upper byte of a 16 bit value */
+  } endian_data;
+
+  endian_data.uint16_value = 1;
+
+  configuration_p->header.ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
+  configuration_p->header.size = 3;
+  configuration_p->header.type = (uint8_t) JERRY_DEBUGGER_CONFIGURATION;
+  configuration_p->cpointer_size = sizeof (jmem_cpointer_t);
+  configuration_p->little_endian = (endian_data.uint8_value[0] == 1);
+
+  jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
+                       sizeof (jerry_debugger_message_configuration_t));
+
+  int socket_flags = fcntl (JERRY_CONTEXT (debugger_connection), F_GETFL, 0);
 
   if (socket_flags < 0)
   {
-    close (JERRY_CONTEXT (jerry_debugger_connection));
+    close (JERRY_CONTEXT (debugger_connection));
     jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Error: %s\n", strerror (errno));
     return false;
   }
 
-  if (fcntl (JERRY_CONTEXT (jerry_debugger_connection), F_SETFL, socket_flags | O_NONBLOCK) == -1)
+  if (fcntl (JERRY_CONTEXT (debugger_connection), F_SETFL, socket_flags | O_NONBLOCK) == -1)
   {
-    close (JERRY_CONTEXT (jerry_debugger_connection));
+    close (JERRY_CONTEXT (debugger_connection));
     jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Error: %s\n", strerror (errno));
     return false;
   }
@@ -363,7 +382,7 @@ bool jerry_debugger_socket_init ()
 void jerry_debugger_connection_end (void)
 {
   jerry_port_log (JERRY_LOG_LEVEL_DEBUG, "TCPServer connection closed on port: %d\n", PORT);
-  close (JERRY_CONTEXT (jerry_debugger_connection));
+  close (JERRY_CONTEXT (debugger_connection));
 } /* jerry_debugger_connection_end */
 
 /*
@@ -378,7 +397,7 @@ jerry_debugger_receive (void)
 
   while (true)
   {
-    ssize_t byte_recv = recv (JERRY_CONTEXT (jerry_debugger_connection),
+    ssize_t byte_recv = recv (JERRY_CONTEXT (debugger_connection),
                               recv_buffer_p + JERRY_CONTEXT (debugger_receive_buffer_offset),
                               JERRY_DEBUGGER_MAX_BUFFER_SIZE - JERRY_CONTEXT (debugger_receive_buffer_offset),
                               0);
@@ -463,7 +482,7 @@ bool jerry_debugger_send (const uint8_t *data_p, /**< data pointer */
 {
   do
   {
-    ssize_t sent_bytes = send (JERRY_CONTEXT (jerry_debugger_connection), data_p, data_size, 0);
+    ssize_t sent_bytes = send (JERRY_CONTEXT (debugger_connection), data_p, data_size, 0);
 
     if (sent_bytes < 0)
     {
@@ -492,14 +511,14 @@ jerry_debugger_send_type (jerry_debugger_header_type_t type) /**< message type *
 {
   JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
 
-  JERRY_DEBUGGER_MESSAGE (jerry_debugger_message_header_t, message_header_p);
+  JERRY_DEBUGGER_MESSAGE (jerry_debugger_send_message_header_t, message_header_p);
 
   message_header_p->ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
   message_header_p->size = 1;
   message_header_p->type = (uint8_t) type;
 
   jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
-                       sizeof (jerry_debugger_message_header_t));
+                       sizeof (jerry_debugger_send_message_header_t));
 } /* jerry_debugger_send_type */
 
 /**
@@ -512,7 +531,7 @@ jerry_debugger_send_data (jerry_debugger_header_type_t type, /**< message type *
 {
   JERRY_ASSERT (size < JERRY_DEBUGGER_MAX_SIZE (uint8_t));
 
-  JERRY_DEBUGGER_MESSAGE (jerry_debugger_message_header_t, message_header_p);
+  JERRY_DEBUGGER_MESSAGE (jerry_debugger_send_message_header_t, message_header_p);
 
   message_header_p->ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
   message_header_p->size = (uint8_t) (size + 1);
@@ -520,7 +539,7 @@ jerry_debugger_send_data (jerry_debugger_header_type_t type, /**< message type *
   memcpy (message_header_p + 1, data, size);
 
   jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
-                       sizeof (jerry_debugger_message_header_t) + size);
+                       sizeof (jerry_debugger_send_message_header_t) + size);
 } /* jerry_debugger_send_data */
 
 /**
@@ -557,7 +576,7 @@ jerry_debugger_send_string (uint8_t message_type, /**< message type */
   memcpy (message_string_p->string, string_p, string_length);
 
   jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
-                       sizeof (jerry_debugger_message_header_t) + string_length);
+                       sizeof (jerry_debugger_send_message_header_t) + string_length);
 } /* jerry_debugger_send_string */
 
 /**
