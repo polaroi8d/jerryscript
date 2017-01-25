@@ -22,14 +22,15 @@ from struct import *
 from pprint import pprint # For the readable stack printing
 
 # Define the debugger buffer types
-JERRY_DEBUGGER_PARSE_ERROR = 1
-JERRY_DEBUGGER_BYTE_CODE_CPTR = 2
-JERRY_DEBUGGER_PARSE_FUNCTION = 3
-JERRY_DEBUGGER_BREAKPOINT_LIST = 4
-JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 5
-JERRY_DEBUGGER_SOURCE_FILE_NAME = 6
-JERRY_DEBUGGER_FUNCTION_NAME = 7
-JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR = 8
+JERRY_DEBUGGER_CONFIGURATION = 1
+JERRY_DEBUGGER_PARSE_ERROR = 2
+JERRY_DEBUGGER_BYTE_CODE_CPTR = 3
+JERRY_DEBUGGER_PARSE_FUNCTION = 4
+JERRY_DEBUGGER_BREAKPOINT_LIST = 5
+JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 6
+JERRY_DEBUGGER_SOURCE_FILE_NAME = 7
+JERRY_DEBUGGER_FUNCTION_NAME = 8
+JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR = 9
 
 PORT = 5001
 MAX_BUFFER_SIZE = 64  # Need to be the same as the jerry debugger MAX_BUFFER_SIZE
@@ -63,14 +64,40 @@ class JerryDebugger:
                     b'Connection: Upgrade\r\n' +
                     b'Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n')
 
-        while len(result) < len(expected):
+        len_expected = len(expected)
+
+        while len(result) < len_expected:
             result += self.client_socket.recv(1024)
 
         len_result = len(result)
-        len_expected = len(expected)
 
         if result[0:len_expected] != expected:
             raise Exception('Unexpected handshake')
+
+        if len_result > len_expected:
+            result = result[len_expected:]
+
+        len_expected = 5;
+
+        while len(result) < len_expected:
+            result += self.client_socket.recv(1024)
+
+        len_result = len(result)
+
+        if (ord(result[0]) != 0x82
+            or ord(result[1]) != 3
+            or ord(result[2]) != JERRY_DEBUGGER_CONFIGURATION):
+            raise Exception('Unexpected configuration')
+
+        self.cpointer_size = ord(result[3])
+        self.little_endian = ord(result[4])
+
+        if self.little_endian:
+            logging.debug('Little endian machine')
+        else:
+            logging.debug('Big endian machine')
+
+        logging.debug('Compressed pointer size: %d' % (self.cpointer_size))
 
         if len_result > len_expected:
             self.message_data = result[len_expected:]
@@ -195,7 +222,7 @@ def main():
             msg = error_msg[1]
         sys.exit('Failed to create the socket. Error: %d %s' % (errno, msg))
 
-    logging.debug('Socket created on: %d' % (PORT))
+    logging.debug('Connected to JerryScript on %d port' % (PORT))
 
     while True:
 
