@@ -19,14 +19,11 @@
 #include "ecma-helpers.h"
 #include "ecma-lcache.h"
 #include "ecma-property-hashmap.h"
+#include "jcontext.h"
+#include "jerry-debugger.h"
 #include "jrt-bit-fields.h"
 #include "byte-code.h"
 #include "re-compiler.h"
-
-#ifdef JERRY_DEBUGGER
-#include "jcontext.h"
-#include "jerry-debugger.h"
-#endif /*JERRY_DEBUGGER */
 
 /** \addtogroup ecma ECMA
  * @{
@@ -1429,7 +1426,7 @@ ecma_bytecode_deref (ecma_compiled_code_t *bytecode_p) /**< byte code pointer */
 #ifdef JERRY_DEBUGGER
     if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
     {
-      jerry_debugger_send_function_cp (JERRY_DEBUGGER_FREE_BYTE_CODE_CPTR, bytecode_p);
+      jerry_debugger_send_function_cp (JERRY_DEBUGGER_FREE_BYTE_CODE_CP, bytecode_p);
     }
 #endif /* JERRY_DEBUGGER */
 

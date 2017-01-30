@@ -39,8 +39,10 @@
  *  http://www.itl.nist.gov/fipspubs/fip180-1.htm
  */
 
-#include "jmem-allocator.h"
+#ifdef JERRY_DEBUGGER
+
 #include "jerry-debugger.h"
+#include "jmem-allocator.h"
 
 /**
  * SHA-1 context structure
@@ -364,3 +366,5 @@ jerry_debugger_compute_sha1 (const uint8_t *source1_p, /**< first part of the in
 
   JMEM_FINALIZE_LOCAL_ARRAY (sha1_context_p);
 } /* jerry_debugger_compute_sha1 */
+
+#endif /* JERRY_DEBUGGER */

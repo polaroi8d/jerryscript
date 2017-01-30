@@ -19,13 +19,10 @@
 #include "common.h"
 
 #include "byte-code.h"
+#include "jerry-debugger.h"
 #include "js-parser.h"
 #include "js-parser-limits.h"
 #include "js-lexer.h"
-
-#ifdef JERRY_DEBUGGER
-#include "jerry-debugger.h"
-#endif /* JERRY_DEBUGGER */
 
 /** \addtogroup parser Parser
  * @{
