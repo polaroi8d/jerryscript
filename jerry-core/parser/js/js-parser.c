@@ -17,13 +17,10 @@
 #include "ecma-helpers.h"
 #include "ecma-literal-storage.h"
 #include "jcontext.h"
+#include "jerry-debugger.h"
 #include "js-parser-internal.h"
 
 #ifdef JERRY_JS_PARSER
-
-#ifdef JERRY_DEBUGGER
-#include "jerry-debugger.h"
-#endif /*JERRY_DEBUGGER */
 
 /** \addtogroup parser Parser
  * @{
@@ -1803,7 +1800,7 @@ parser_post_processing (parser_context_t *context_p) /**< context */
 #ifdef JERRY_DEBUGGER
   if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
   {
-    jerry_debugger_send_function_cp (JERRY_DEBUGGER_BYTE_CODE_CPTR, compiled_code_p);
+    jerry_debugger_send_function_cp (JERRY_DEBUGGER_BYTE_CODE_CP, compiled_code_p);
   }
 #endif /* JERRY_DEBUGGER */
 

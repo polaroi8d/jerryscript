@@ -20,14 +20,11 @@
 #define JCONTEXT_H
 
 #include "ecma-builtins.h"
+#include "jerry-debugger.h"
 #include "jmem-allocator.h"
 #include "jmem-config.h"
 #include "re-bytecode.h"
 #include "vm-defines.h"
-
-#ifdef JERRY_DEBUGGER
-#include "jerry-debugger.h"
-#endif /*JERRY_DEBUGGER */
 
 /** \addtogroup context Context
  * @{
@@ -92,6 +89,8 @@ typedef struct
   uint8_t debugger_receive_buffer[JERRY_DEBUGGER_MAX_BUFFER_SIZE]; /**< buffer for receiving messages */
   uint32_t debugger_receive_buffer_offset; /**< receive buffer offset */
   int debugger_connection; /**< hold the file descriptor for socket communication */
+  bool debugger_stop_exec; /**< stop at the next breakpoint regardless it is enabled */
+  vm_frame_ctx_t *debugger_stop_context; /**< stop only if the current context is equal to this context */
 #endif /* JERRY_DEBUGGER */
 
 #ifdef JMEM_STATS

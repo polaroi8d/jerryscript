@@ -2305,20 +2305,49 @@ vm_loop (vm_frame_ctx_t *frame_ctx_p) /**< frame context */
           continue;
         }
         case VM_OC_BREAKPOINT_ENABLED:
+        {
+#ifdef JERRY_DEBUGGER
+          JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
+          frame_ctx_p->byte_code_p = byte_code_start_p;
+
+          jerry_debugger_breakpoint_hit ();
+#endif /* JERRY_DEBUGGER */
+          continue;
+        }
         case VM_OC_BREAKPOINT_DISABLED:
         {
 #ifdef JERRY_DEBUGGER
-          if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+          JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
+          frame_ctx_p->byte_code_p = byte_code_start_p;
+
+          if (JERRY_CONTEXT (debugger_stop_exec)
+              && (JERRY_CONTEXT (debugger_stop_context) == NULL
+                  || JERRY_CONTEXT (debugger_stop_context) == JERRY_CONTEXT (vm_top_context_p)))
           {
-            if (JERRY_CONTEXT(debugger_message_delay) == 0)
-            {
-              jerry_debugger_receive();
-              JERRY_CONTEXT(debugger_message_delay) = JERRY_DEBUGGER_MESSAGE_FREQUENCY;
-            }
-            else
-            {
-              JERRY_CONTEXT(debugger_message_delay)--;
-            }
+            jerry_debugger_breakpoint_hit ();
+            continue;
+          }
+
+          if (JERRY_CONTEXT(debugger_message_delay) > 0)
+          {
+            JERRY_CONTEXT (debugger_message_delay)--;
+            continue;
+          }
+
+          JERRY_CONTEXT (debugger_message_delay) = JERRY_DEBUGGER_MESSAGE_FREQUENCY;
+
+          if (jerry_debugger_receive ())
+          {
+            continue;
+          }
+
+          if (JERRY_CONTEXT (debugger_stop_exec)
+              && (JERRY_CONTEXT (debugger_stop_context) == NULL
+                  || JERRY_CONTEXT (debugger_stop_context) == JERRY_CONTEXT (vm_top_context_p)))
+          {
+            jerry_debugger_breakpoint_hit ();
           }
 #endif /* JERRY_DEBUGGER */
           continue;
@@ -2550,7 +2579,6 @@ vm_execute (vm_frame_ctx_t *frame_ctx_p, /**< frame context */
 {
   const ecma_compiled_code_t *bytecode_header_p = frame_ctx_p->bytecode_header_p;
   ecma_value_t completion_value;
-  vm_frame_ctx_t *prev_context_p;
   uint16_t argument_end;
   uint16_t register_end;
 
@@ -2595,7 +2623,6 @@ vm_execute (vm_frame_ctx_t *frame_ctx_p, /**< frame context */
 
   JERRY_CONTEXT (is_direct_eval_form_call) = false;
 
-  prev_context_p = JERRY_CONTEXT (vm_top_context_p);
   JERRY_CONTEXT (vm_top_context_p) = frame_ctx_p;
 
   vm_init_loop (frame_ctx_p);
@@ -2626,7 +2653,16 @@ vm_execute (vm_frame_ctx_t *frame_ctx_p, /**< frame context */
     ecma_fast_free_value (frame_ctx_p->registers_p[i]);
   }
 
-  JERRY_CONTEXT (vm_top_context_p) = prev_context_p;
+#ifdef JERRY_DEBUGGER
+  if (JERRY_CONTEXT (debugger_stop_context) == JERRY_CONTEXT (vm_top_context_p))
+  {
+    /* The engine will stop when the next breakpoint is reached. */
+    JERRY_ASSERT (JERRY_CONTEXT (debugger_stop_exec));
+    JERRY_CONTEXT (debugger_stop_context) = NULL;
+  }
+#endif /* JERRY_DEBUGGER */
+
+  JERRY_CONTEXT (vm_top_context_p) = frame_ctx_p->prev_context_p;
   return completion_value;
 } /* vm_execute */
 
@@ -2672,6 +2708,7 @@ vm_run (const ecma_compiled_code_t *bytecode_header_p, /**< byte-code data heade
   frame_ctx.byte_code_p = (uint8_t *) literal_p;
   frame_ctx.byte_code_start_p = (uint8_t *) literal_p;
   frame_ctx.lex_env_p = lex_env_p;
+  frame_ctx.prev_context_p = JERRY_CONTEXT (vm_top_context_p);
   frame_ctx.this_binding = this_binding_value;
   frame_ctx.context_depth = 0;
   frame_ctx.is_eval_code = is_eval_code;

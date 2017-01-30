@@ -31,15 +31,12 @@
 #include "ecma-objects-general.h"
 #include "jcontext.h"
 #include "jerry-api.h"
+#include "jerry-debugger.h"
 #include "js-parser.h"
 #include "re-compiler.h"
 
 #define JERRY_INTERNAL
 #include "jerry-internal.h"
-
-#ifdef JERRY_DEBUGGER
-#include "jerry-debugger.h"
-#endif /* JERRY_DEBUGGER */
 
 JERRY_STATIC_ASSERT (sizeof (jerry_value_t) == sizeof (ecma_value_t),
                      size_of_jerry_value_t_must_be_equal_to_size_of_ecma_value_t);
@@ -162,7 +159,7 @@ jerry_init (jerry_init_flag_t flags) /**< combination of Jerry flags */
 #ifdef JERRY_DEBUGGER
   if (flags & JERRY_INIT_DEBUGGER)
   {
-    jerry_debugger_socket_init ();
+    jerry_debugger_accept_connection ();
   }
 #endif /* JERRY_DEBUGGER */
 } /* jerry_init */
@@ -182,7 +179,7 @@ jerry_cleanup (void)
 #ifdef JERRY_DEBUGGER
   if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
   {
-    jerry_debugger_connection_end ();
+    jerry_debugger_close_connection (false);
   }
 #endif /* JERRY_DEBUGGER */
 } /* jerry_cleanup */
@@ -313,6 +310,35 @@ jerry_parse (const jerry_char_t *source_p, /**< script source */
   return ecma_raise_syntax_error (ECMA_ERR_MSG ("The parser has been disabled."));
 #endif /* JERRY_JS_PARSER */
 } /* jerry_parse */
+
+/**
+ * Parse script and construct an EcmaScript function. The lexical
+ * environment is set to the global lexical environment. The name
+ * (usually a file name) is also passed to this function which is
+ * used by the debugger to find the source code.
+ *
+ * @return function object value - if script was parsed successfully,
+ *         thrown error - otherwise
+ */
+jerry_value_t
+jerry_parse_named_resource (const jerry_char_t *name_p, /**< name (usually a file name) */
+                            size_t name_length, /**< length of name */
+                            const jerry_char_t *source_p, /**< script source */
+                            size_t source_size, /**< script source size */
+                            bool is_strict) /**< strict mode */
+{
+#ifdef JERRY_DEBUGGER
+  if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+  {
+    jerry_debugger_send_string (JERRY_DEBUGGER_RESOURCE_NAME, name_p, name_length);
+  }
+#else /* JERRY_DEBUGGER */
+  JERRY_UNUSED (name_p);
+  JERRY_UNUSED (name_length);
+#endif /* JERRY_DEBUGGER */
+
+  return jerry_parse (source_p, source_size, is_strict);
+} /* jerry_parse_named_resource */
 
 /**
  * Run an EcmaScript function created by jerry_parse.

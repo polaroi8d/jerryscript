@@ -124,7 +124,7 @@ print_help (char *name)
                       "  --parse-only\n"
                       "  --show-opcodes\n"
                       "  --show-regexp-opcodes\n"
-                      "  --jerry-debugger-support\n"
+                      "  --start-debug-server\n"
                       "  --save-snapshot-for-global FILE\n"
                       "  --save-snapshot-for-eval FILE\n"
                       "  --save-literals-list-format FILE\n"
@@ -436,7 +436,7 @@ main (int argc,
                         "Ignoring 'show-regexp-opcodes' option because this feature is disabled!\n");
       }
     }
-    else if (!strcmp ("--jerry-debugger-support", argv[i]))
+    else if (!strcmp ("--start-debug-server", argv[i]))
     {
       flags |= JERRY_INIT_DEBUGGER;
       jerry_port_default_set_log_level (JERRY_LOG_LEVEL_DEBUG);
@@ -658,13 +658,6 @@ main (int argc,
       size_t source_size;
       const jerry_char_t *source_p = read_file (file_names[i], &source_size);
 
-      /**
-       * Send the source file name to the client
-       */
-#ifdef JERRY_DEBUGGER
-      jerry_debugger_send_source_file_name ((jerry_char_t *) file_names[i], strlen (file_names[i]));
-#endif /* JERRY_DEBUGGER */
-
       if (source_p == NULL)
       {
         ret_value = jerry_create_error (JERRY_ERROR_COMMON, (jerry_char_t *) "Source file load error");
@@ -716,7 +709,11 @@ main (int argc,
       }
       else
       {
-        ret_value = jerry_parse (source_p, source_size, false);
+        ret_value = jerry_parse_named_resource ((jerry_char_t *) file_names[i],
+                                                strlen (file_names[i]),
+                                                source_p,
+                                                source_size,
+                                                false);
 
         if (!jerry_value_has_error_flag (ret_value) && !is_parse_only)
         {
