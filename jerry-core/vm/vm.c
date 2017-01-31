@@ -2330,7 +2330,7 @@ vm_loop (vm_frame_ctx_t *frame_ctx_p) /**< frame context */
             continue;
           }
 
-          if (JERRY_CONTEXT(debugger_message_delay) > 0)
+          if (JERRY_CONTEXT (debugger_message_delay) > 0)
           {
             JERRY_CONTEXT (debugger_message_delay)--;
             continue;

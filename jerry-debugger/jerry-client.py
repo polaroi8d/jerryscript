@@ -46,21 +46,19 @@ JERRY_DEBUGGER_NEXT = 4
 JERRY_DEBUGGER_GET_BACKTRACE = 5
 
 PORT = 5001
-MAX_BUFFER_SIZE = 64  # Need to be the same as the jerry debugger MAX_BUFFER_SIZE
+MAX_BUFFER_SIZE = 128
 HOST = "localhost"
 
 def arguments_parse():
     parser = argparse.ArgumentParser(description='JerryScript debugger client.')
 
-    parser.add_argument('-v', '--verbose',
-                        action='store_true',
-                        help='increase verbosity (default: %(default)s)')
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help='increase verbosity (default: %(default)s)')
 
     args = parser.parse_args()
 
     if args.verbose:
-       logging.basicConfig(format='%(levelname)s: %(message)s' , level=logging.DEBUG)
-       logging.debug('Debug logging mode: ON')
+        logging.basicConfig(format='%(levelname)s: %(message)s' , level=logging.DEBUG)
+        logging.debug('Debug logging mode: ON')
 
 class JerryBreakpoint(object):
 
@@ -118,6 +116,129 @@ class JerryFunction(object):
             comma_needed = True
 
         return result + " })"
+
+class DebuggerPrompt(Cmd):
+
+    def __init__(self, debugger):
+        Cmd.__init__(self)
+        self.debugger = debugger
+        self.stop = False
+
+    def precmd(self, line):
+        self.stop = False
+        return line
+
+    def postcmd(self, stop, line):
+        return self.stop
+
+    def insert_breakpoint(self, args):
+        if args == '':
+            print 'Error: breakpoint index expected'
+        else:
+            set_breakpoint(self.debugger, args)
+
+    def do_break(self, args):
+        """ Insert breakpoints in the given lines """
+        self.insert_breakpoint(args)
+
+    def do_b(self, args):
+        """ Insert breakpoints in the given lines """
+        self.insert_breakpoint(args)
+
+    def exec_command(self, args, command_id):
+        self.stop = True
+        if args != '':
+            print 'Error: no argument expected'
+        else:
+            self.debugger.send_command(command_id)
+
+    def do_continue(self, args):
+        """ Continue execution """
+        self.exec_command(args, JERRY_DEBUGGER_CONTINUE)
+
+    def do_c(self, args):
+        """ Continue execution """
+        self.exec_command(args, JERRY_DEBUGGER_CONTINUE)
+
+    def do_step(self, args):
+        """ Next breakpoint, step into functions """
+        self.exec_command(args, JERRY_DEBUGGER_STEP)
+
+    def do_s(self, args):
+        """ Next breakpoint, step into functions """
+        self.exec_command(args, JERRY_DEBUGGER_STEP)
+
+    def do_next(self, args):
+        """ Next breakpoint in the same context """
+        self.exec_command(args, JERRY_DEBUGGER_NEXT)
+
+    def do_n(self, args):
+        """ Next breakpoint in the same context """
+        self.exec_command(args, JERRY_DEBUGGER_NEXT)
+
+    def do_list(self, args):
+        """ Listed the available breakpoints """
+        if args != '':
+            print 'Error: no argument expected'
+            return
+
+        for breakpoint in self.debugger.active_breakpoint_list.values():
+            source = breakpoint.function.source
+            print '%d: %s' % (breakpoint.active_index, breakpoint.to_string())
+
+    def do_delete(self, args):
+        """ Delete the given breakpoint """
+        if not args:
+            print 'Error: breakpoint index expected'
+            return
+
+        try:
+            breakpoint_index = int(args)
+        except:
+            print 'Error: integer number expected'
+            return
+
+        if breakpoint_index in self.debugger.active_breakpoint_list:
+            breakpoint = self.debugger.active_breakpoint_list[breakpoint_index]
+            del self.debugger.active_breakpoint_list[breakpoint_index]
+            breakpoint.active_index = -1
+            self.debugger.send_breakpoint(breakpoint)
+        else:
+            print 'Error: breakpoint %d not found' % (breakpoint_index)
+
+    def exec_backtrace(self, args):
+        max_depth = 0
+
+        if args:
+            try:
+                max_depth = int(args)
+                if max_depth <= 0:
+                    print 'Error: positive integer number expected'
+                    return
+            except:
+                print 'Error: positive integer number expected'
+                return
+
+        message = pack(self.debugger.byte_order + 'BBIB' + self.debugger.idx_format,
+                       0x82,
+                       0x80 + 1 + 4,
+                       0,
+                       JERRY_DEBUGGER_GET_BACKTRACE,
+                       max_depth)
+        self.debugger.send_message(message)
+        self.stop = True
+
+    def do_backtrace(self, args):
+        """ Get bracktrace data from debugger """
+        self.exec_backtrace(args)
+
+    def do_bt(self, args):
+        """ Get bracktrace data from debugger """
+        self.exec_backtrace(args)
+
+    def do_dump(self, args):
+        """ Dump all of the debugger data """
+        pprint(self.debugger.function_list)
 
 class Multimap(object):
 
@@ -283,7 +404,7 @@ def parse_source(debugger, data):
         buffer_type = ord(data[2])
         buffer_size = ord(data[1]) - 1
 
-        logging.debug('PARSER_SOURCE: buffer type: %d, message size: %d' % (buffer_type, buffer_size))
+        logging.debug('Parser buffer type: %d, message size: %d' % (buffer_type, buffer_size))
 
         if buffer_type == JERRY_DEBUGGER_PARSE_ERROR:
             logging.error('Parser error!')
@@ -319,7 +440,7 @@ def parse_source(debugger, data):
             byte_code_cp = unpack(debugger.byte_order + debugger.cp_format,
                                   data[3 : 3 + debugger.cp_size])[0]
 
-            logging.debug('Byte code cptr recieved: {0x%x}' % (byte_code_cp))
+            logging.debug('Byte code cptr received: {0x%x}' % (byte_code_cp))
 
             func_desc = stack.pop()
 
@@ -407,116 +528,6 @@ def set_breakpoint(debugger, string):
         print 'Breakpoint not found'
         return
 
-class DebuggerPrompt(Cmd):
-
-    def __init__(self, debugger):
-        Cmd.__init__(self)
-        self.debugger = debugger
-        self.stop = False
-
-    def precmd(self, line):
-        self.stop = False
-        return line
-
-    def postcmd(self, stop, line):
-        return self.stop
-
-    def insert_breakpoint(self, args):
-        if args == '':
-            print 'Error: breakpoint index expected'
-        else:
-            set_breakpoint(self.debugger, args)
-
-    def do_break(self, args):
-        self.insert_breakpoint(args)
-
-    def do_b(self, args):
-        self.insert_breakpoint(args)
-
-    def exec_command(self, args, command_id):
-        self.stop = True
-        if args != '':
-            print 'Error: no argument expected'
-        else:
-            self.debugger.send_command(command_id)
-
-    def do_continue(self, args):
-        self.exec_command(args, JERRY_DEBUGGER_CONTINUE)
-
-    def do_c(self, args):
-        self.exec_command(args, JERRY_DEBUGGER_CONTINUE)
-
-    def do_step(self, args):
-        self.exec_command(args, JERRY_DEBUGGER_STEP)
-
-    def do_s(self, args):
-        self.exec_command(args, JERRY_DEBUGGER_STEP)
-
-    def do_next(self, args):
-        self.exec_command(args, JERRY_DEBUGGER_NEXT)
-
-    def do_n(self, args):
-        self.exec_command(args, JERRY_DEBUGGER_NEXT)
-
-    def do_list(self, args):
-        if args != '':
-            print 'Error: no argument expected'
-            return
-
-        for breakpoint in self.debugger.active_breakpoint_list.values():
-            source = breakpoint.function.source
-            print '%d: %s' % (breakpoint.active_index, breakpoint.to_string())
-
-    def do_delete(self, args):
-        if not args:
-            print 'Error: breakpoint index expected'
-            return
-
-        try:
-            breakpoint_index = int(args)
-        except:
-            print 'Error: integer number expected'
-            return
-
-        if breakpoint_index in self.debugger.active_breakpoint_list:
-            breakpoint = self.debugger.active_breakpoint_list[breakpoint_index]
-            del self.debugger.active_breakpoint_list[breakpoint_index]
-            breakpoint.active_index = -1
-            self.debugger.send_breakpoint(breakpoint)
-        else:
-            print 'Error: breakpoint %d not found' % (breakpoint_index)
-
-    def exec_backtrace(self, args):
-        max_depth = 0
-
-        if args:
-            try:
-                max_depth = int(args)
-                if max_depth <= 0:
-                    print 'Error: positive integer number expected'
-                    return
-            except:
-                print 'Error: positive integer number expected'
-                return
-
-        message = pack(self.debugger.byte_order + 'BBIB' + self.debugger.idx_format,
-                       0x82,
-                       0x80 + 1 + 4,
-                       0,
-                       JERRY_DEBUGGER_GET_BACKTRACE,
-                       max_depth)
-        self.debugger.send_message(message)
-        self.stop = True
-
-    def do_backtrace(self, args):
-        self.exec_backtrace(args)
-
-    def do_bt(self, args):
-        self.exec_backtrace(args)
-
-    def do_dump(self, args):
-        print self.debugger.function_list
-
 def main():
     arguments_parse()
 
@@ -535,6 +546,7 @@ def main():
     logging.debug('Connected to JerryScript on %d port' % (PORT))
 
     prompt = DebuggerPrompt(debugger)
+    prompt.prompt = '(jerry-debugger)'
 
     while True:
 
@@ -546,7 +558,7 @@ def main():
         buffer_type = ord(data[2])
         buffer_size = ord(data[1]) - 1
 
-        logging.debug('MAIN buffer type: %d, message size: %d' % (buffer_type, buffer_size))
+        logging.debug('Main buffer type: %d, message size: %d' % (buffer_type, buffer_size))
 
         if buffer_type in [JERRY_DEBUGGER_PARSE_ERROR,
                            JERRY_DEBUGGER_RESOURCE_NAME,

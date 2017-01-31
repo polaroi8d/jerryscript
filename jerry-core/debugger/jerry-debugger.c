@@ -138,13 +138,13 @@ jerry_to_base64 (const uint8_t *source_p, /**< source data */
     destination_p += 4;
     length -= 3;
   }
-}
+} /* jerry_to_base64 */
 
 /**
  * Process WebSocket handshake.
  *
- * @return true is no error is occured
- *         false otherwise
+ * @return true - is no error is occured
+ *         false - otherwise
  */
 static bool
 jerry_process_handshake (int client_socket, /**< client socket */
@@ -232,8 +232,8 @@ jerry_process_handshake (int client_socket, /**< client socket */
     websocket_key_end_p++;
   }
 
-  /* Since the request_buffer_p is not needed anymore it
-   * can be reused for storing the SHA-1 key and base-64 string. */
+  /* Since the request_buffer_p is not needed anymore it can
+   * be reused for storing the SHA-1 key and base-64 string. */
 
   const size_t sha1_length = 20;
 
@@ -271,7 +271,7 @@ jerry_process_handshake (int client_socket, /**< client socket */
  * Initialize the socket connection.
  *
  * @return true - if the connection succeeded
- *         false - otherwise.
+ *         false - otherwise
  */
 bool
 jerry_debugger_accept_connection ()
@@ -469,9 +469,10 @@ jerry_debugger_send_backtrace (void)
 } /* jerry_debugger_send_backtrace */
 
 /**
- * Recieve message from the client.
+ * Receive message from the client.
  *
- * @return true if execution should be resumed, false otherwise
+ * @return true if execution should be resumed
+ *         false otherwise
  */
 bool
 jerry_debugger_receive (void)
@@ -627,7 +628,7 @@ jerry_debugger_receive (void)
  * Send the message to the client side
  *
  * @return true - if the data was send successfully to the client side
- *         false - otherwise.
+ *         false - otherwise
  */
 bool jerry_debugger_send (const uint8_t *data_p, /**< data pointer */
                           size_t data_size) /**< data size */

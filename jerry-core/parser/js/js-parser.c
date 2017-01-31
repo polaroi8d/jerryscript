@@ -1586,7 +1586,7 @@ parser_post_processing (parser_context_t *context_p) /**< context */
 #ifdef JERRY_DEBUGGER
     if (opcode == CBC_BREAKPOINT_DISABLED)
     {
-      uint32_t offset = (uint32_t) (((uint8_t*) dst_p) - ((uint8_t*) compiled_code_p) - 1);
+      uint32_t offset = (uint32_t) (((uint8_t *) dst_p) - ((uint8_t *) compiled_code_p) - 1);
       parser_append_breakpoint_info (context_p, JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST, offset);
     }
 #endif /* JERRY_DEBUGGER */

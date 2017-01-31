@@ -44,8 +44,8 @@ void jerry_debugger_compute_sha1 (const uint8_t *input1, size_t input1_len,
 #endif /* JERRY_DEBUGGER_MAX_BUFFER_SIZE < 64 || JERRY_DEBUGGER_MAX_BUFFER_SIZE > 256 */
 
 /**
- * Calculate how many source file name, function name and breakpoint
- * can send in one buffer without overflow.
+ * Calculate the maximum number of items for a given type
+ * can one message hold.
  */
 #define JERRY_DEBUGGER_MAX_SIZE(type) \
  ((JERRY_DEBUGGER_MAX_BUFFER_SIZE - sizeof (jerry_debugger_send_message_header_t)) / sizeof (type))
@@ -63,12 +63,7 @@ void jerry_debugger_compute_sha1 (const uint8_t *input1, size_t input1_len,
   type *name_p = ((type *) &JERRY_CONTEXT (debugger_receive_buffer))
 
 /**
- * Types for the package
- *
- * This helps the debugger to decide what type of the data come
- * from the JerryScript. If the buffer size is not enough for
- * the message the engine split it up into many pieces. The header
- * of the last piece has a type with an '_END' postfix.
+ * Types for the package.
  */
 typedef enum
 {
@@ -78,7 +73,7 @@ typedef enum
   JERRY_DEBUGGER_BYTE_CODE_CP = 3, /**< byte code compressed pointer */
   JERRY_DEBUGGER_PARSE_FUNCTION = 4, /**< parsing a new function */
   JERRY_DEBUGGER_BREAKPOINT_LIST = 5, /**< list of line offsets */
-  JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 6, /**< list of bzte code offsets*/
+  JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 6, /**< list of byte code offsets */
   JERRY_DEBUGGER_RESOURCE_NAME = 7, /**< resource name fragment */
   JERRY_DEBUGGER_FUNCTION_NAME = 8, /**< function name fragment */
   JERRY_DEBUGGER_FREE_BYTE_CODE_CP = 9, /**< invalidate byte code compressed pointer */
@@ -106,7 +101,7 @@ typedef struct
 } jerry_debugger_send_message_header_t;
 
 /**
- * Header for outgoing packets.
+ * Header for incoming packets.
  */
 typedef struct
 {
@@ -136,7 +131,7 @@ typedef struct
 } jerry_debugger_message_send_string_t;
 
 /**
- * Byte code compressed pointer
+ * Byte code compressed pointer.
  */
 typedef struct
 {
@@ -153,6 +148,15 @@ typedef struct
   uint8_t byte_code_cp[sizeof (jmem_cpointer_t)]; /**< byte code compressed pointer */
   uint8_t offset[sizeof (uint32_t)]; /**< breakpoint offset */
 } jerry_debugger_message_send_breakpoint_hit_t;
+
+/**
+ * Send backtrace.
+ */
+typedef struct
+{
+  jerry_debugger_send_message_header_t header; /**< message header */
+  jerry_debugger_frame_t frames[JERRY_DEBUGGER_MAX_SIZE (jerry_debugger_frame_t)]; /**< frames */
+} jerry_debugger_message_send_backtrace_t;
 
 /**
  * Update (enable/disable) breakpoint status.
@@ -182,15 +186,6 @@ typedef struct
   uint8_t byte_code_cp[sizeof (jmem_cpointer_t)]; /**< byte code compressed pointer */
   uint8_t offset[sizeof (uint32_t)]; /**< last breakpoint offset */
 } jerry_debugger_frame_t;
-
-/**
- * Send backtrace.
- */
-typedef struct
-{
-  jerry_debugger_send_message_header_t header; /**< message header */
-  jerry_debugger_frame_t frames[JERRY_DEBUGGER_MAX_SIZE (jerry_debugger_frame_t)]; /**< frames */
-} jerry_debugger_message_send_backtrace_t;
 
 bool jerry_debugger_receive (void);
 void jerry_debugger_send_type (jerry_debugger_header_type_t type);
