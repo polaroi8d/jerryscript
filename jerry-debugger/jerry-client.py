@@ -32,18 +32,19 @@ JERRY_DEBUGGER_BREAKPOINT_LIST = 5
 JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 6
 JERRY_DEBUGGER_RESOURCE_NAME = 7
 JERRY_DEBUGGER_FUNCTION_NAME = 8
-JERRY_DEBUGGER_FREE_BYTE_CODE_CP = 9
+JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 9
 JERRY_DEBUGGER_BREAKPOINT_HIT = 10
 JERRY_DEBUGGER_BACKTRACE = 11
 JERRY_DEBUGGER_BACKTRACE_END = 12
 
 # Messages sent by the client to server
-JERRY_DEBUGGER_UPDATE_BREAKPOINT = 0
-JERRY_DEBUGGER_STOP = 1
-JERRY_DEBUGGER_CONTINUE = 2
-JERRY_DEBUGGER_STEP = 3
-JERRY_DEBUGGER_NEXT = 4
-JERRY_DEBUGGER_GET_BACKTRACE = 5
+JERRY_DEBUGGER_FREE_BYTE_CODE_CP = 1
+JERRY_DEBUGGER_UPDATE_BREAKPOINT = 2
+JERRY_DEBUGGER_STOP = 3
+JERRY_DEBUGGER_CONTINUE = 4
+JERRY_DEBUGGER_STEP = 5
+JERRY_DEBUGGER_NEXT = 6
+JERRY_DEBUGGER_GET_BACKTRACE = 7
 
 PORT = 5001
 MAX_BUFFER_SIZE = 128
@@ -72,7 +73,7 @@ class JerryBreakpoint(object):
         result = self.function.source
 
         if result == '':
-            source = '<unknown>'
+            result = '<unknown>'
 
         result += ":%d" % (self.line)
 
@@ -301,7 +302,7 @@ class JerryDebugger(object):
         if len_result > len_expected:
             result = result[len_expected:]
 
-        len_expected = 5;
+        len_expected = 6;
 
         while len(result) < len_expected:
             result += self.client_socket.recv(1024)
@@ -309,12 +310,13 @@ class JerryDebugger(object):
         len_result = len(result)
 
         if (ord(result[0]) != 0x82
-            or ord(result[1]) != 3
+            or ord(result[1]) != 4
             or ord(result[2]) != JERRY_DEBUGGER_CONFIGURATION):
             raise Exception('Unexpected configuration')
 
-        self.cp_size = ord(result[3])
-        self.little_endian = ord(result[4])
+        self.max_message_size = ord(result[3])
+        self.cp_size = ord(result[4])
+        self.little_endian = ord(result[5])
 
         if self.little_endian:
             self.byte_order = '<'
@@ -485,7 +487,17 @@ def release_function(debugger, data):
             del debugger.active_breakpoint_list[breakpoint.active_index]
 
     del debugger.function_list[byte_code_cp]
-    logging.debug('Function {0x%x} bytecode released' % byte_code_cp)
+
+    message = pack(debugger.byte_order + 'BBIB' + debugger.cp_format,
+                   0x82,
+                   0x80 + 1 + debugger.cp_size,
+                   0,
+                   JERRY_DEBUGGER_FREE_BYTE_CODE_CP,
+                   byte_code_cp);
+
+    debugger.send_message(message)
+
+    logging.debug('Function {0x%x} byte-code released' % byte_code_cp)
 
 def enable_breakpoint(debugger, breakpoint):
     if breakpoint.active_index < 0:
@@ -531,22 +543,12 @@ def set_breakpoint(debugger, string):
 def main():
     arguments_parse()
 
-    try:
-        debugger = JerryDebugger()
-
-    except socket.error as error_msg:
-        try:
-            errno = error_msg.errno
-            msg = str(error_msg)
-        except:
-            errno = error_msg[0]
-            msg = error_msg[1]
-        sys.exit('Failed to create the socket. Error: %d %s' % (errno, msg))
+    debugger = JerryDebugger()
 
     logging.debug('Connected to JerryScript on %d port' % (PORT))
 
     prompt = DebuggerPrompt(debugger)
-    prompt.prompt = '(jerry-debugger)'
+    prompt.prompt = '(jerry-debugger) '
 
     while True:
 
@@ -561,13 +563,14 @@ def main():
         logging.debug('Main buffer type: %d, message size: %d' % (buffer_type, buffer_size))
 
         if buffer_type in [JERRY_DEBUGGER_PARSE_ERROR,
-                           JERRY_DEBUGGER_RESOURCE_NAME,
-                           JERRY_DEBUGGER_FUNCTION_NAME,
+                           JERRY_DEBUGGER_BYTE_CODE_CP,
                            JERRY_DEBUGGER_PARSE_FUNCTION,
-                           JERRY_DEBUGGER_BYTE_CODE_CP]:
+                           JERRY_DEBUGGER_BREAKPOINT_LIST,
+                           JERRY_DEBUGGER_RESOURCE_NAME,
+                           JERRY_DEBUGGER_FUNCTION_NAME]:
             parse_source(debugger, data)
 
-        elif buffer_type == JERRY_DEBUGGER_FREE_BYTE_CODE_CP:
+        elif buffer_type == JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP:
             release_function(debugger, data)
 
         elif buffer_type == JERRY_DEBUGGER_BREAKPOINT_HIT:
@@ -627,10 +630,22 @@ def main():
             prompt.cmdloop()
 
         else:
-            logging.debug('Feature implementation is in progress...')
-
-    logging.debug('Main debugger function list:')
-    logging.debug(debugger.function_list)
+            raise Exception('Unknown message')
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except socket.error as error_msg:
+        try:
+            errno = error_msg.errno
+            msg = str(error_msg)
+        except:
+            errno = error_msg[0]
+            msg = error_msg[1]
+
+        if errno == 111:
+            sys.exit('Failed to connect to the JerryScript debugger.')
+        elif errno == 32:
+            sys.exit('Connection closed.')
+        else:
+            sys.exit('Failed to connect to the JerryScript debugger.\nError: %s' % (msg))

@@ -173,8 +173,6 @@ jerry_cleanup (void)
   jerry_assert_api_available ();
 
   ecma_finalize ();
-  jmem_finalize ();
-  jerry_make_api_unavailable ();
 
 #ifdef JERRY_DEBUGGER
   if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
@@ -182,6 +180,9 @@ jerry_cleanup (void)
     jerry_debugger_close_connection (false);
   }
 #endif /* JERRY_DEBUGGER */
+
+  jmem_finalize ();
+  jerry_make_api_unavailable ();
 } /* jerry_cleanup */
 
 /**

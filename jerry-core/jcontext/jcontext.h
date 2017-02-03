@@ -86,6 +86,7 @@ typedef struct
   uint32_t debugger_message_delay; /**< call receive message when reaches zero */
   uint8_t debugger_send_buffer[JERRY_DEBUGGER_MAX_BUFFER_SIZE]; /**< buffer for sending messages */
   uint8_t debugger_receive_buffer[JERRY_DEBUGGER_MAX_BUFFER_SIZE]; /**< buffer for receiving messages */
+  jmem_cpointer_t debugger_byte_code_free_head; /**< head of byte code free linked list */
   uint32_t debugger_receive_buffer_offset; /**< receive buffer offset */
   int debugger_connection; /**< hold the file descriptor for socket communication */
   bool debugger_stop_exec; /**< stop at the next breakpoint regardless it is enabled */

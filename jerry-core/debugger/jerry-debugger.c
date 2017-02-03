@@ -32,53 +32,60 @@
 /**
  * Debugger socket communication port.
  */
-#define PORT 5001
+#define JERRY_DEBUGGER_PORT 5001
 
 /**
  * Header size in bytes of a websocket package.
  */
-#define WEBSOCKET_HEADER_SIZE 2
+#define JERRY_DEBUGGER_WEBSOCKET_HEADER_SIZE 2
 
 /**
  * Payload mask size in bytes of a websocket package.
  */
-#define WEBSOCKET_MASK_SIZE 4
+#define JERRY_DEBUGGER_WEBSOCKET_MASK_SIZE 4
 
 /**
  * Total header size in bytes of a websocket package.
  */
-#define WEBSOCKET_HEADER_TOTAL_SIZE (WEBSOCKET_HEADER_SIZE + WEBSOCKET_MASK_SIZE)
+#define JERRY_DEBUGGER_WEBSOCKET_RECEIVE_HEADER_SIZE \
+  (JERRY_DEBUGGER_WEBSOCKET_HEADER_SIZE + JERRY_DEBUGGER_WEBSOCKET_MASK_SIZE)
 
 /**
  * Last fragment of a websocket package.
  */
-#define WEBSOCKET_FIN_BIT 0x80
+#define JERRY_DEBUGGER_WEBSOCKET_FIN_BIT 0x80
 
 /**
  * Masking-key is available.
  */
-#define WEBSOCKET_MASK_BIT 0x80
+#define JERRY_DEBUGGER_WEBSOCKET_MASK_BIT 0x80
 
 /**
  * Opcode type mask.
  */
-#define WEBSOCKET_OPCODE_MASK 0xfu
+#define JERRY_DEBUGGER_WEBSOCKET_OPCODE_MASK 0xfu
 
 /**
  * Packet length mask.
  */
-#define WEBSOCKET_LENGTH_MASK 0x7fu
+#define JERRY_DEBUGGER_WEBSOCKET_LENGTH_MASK 0x7fu
+
+/**
+ * Compute packet size.
+ */
+#define JERRY_DEBUGGER_PACKET_SIZE(type) \
+  ((uint8_t) (sizeof (type) - sizeof (jerry_debugger_send_message_header_t) + 1))
 
 /**
  * Websocket opcode types.
  */
 typedef enum
 {
-  WEBSOCKET_TEXT_FRAME = 1, /**< text frame */
-  WEBSOCKET_BINARY_FRAME = 2, /**< binary frame */
-  WEBSOCKET_CLOSE_CONNECTION = 8, /**< close connection */
-  WEBSOCKET_PING = 8, /**< ping (keep alive) frame */
-  WEBSOCKET_PONG = 9, /**< reply to ping frame */
+  JERRY_DEBUGGER_WEBSOCKET_TEXT_FRAME = 1, /**< text frame */
+  JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME = 2, /**< binary frame */
+  JERRY_DEBUGGER_WEBSOCKET_CLOSE_CONNECTION = 8, /**< close connection */
+  JERRY_DEBUGGER_WEBSOCKET_PING = 9, /**< ping (keep alive) frame */
+  JERRY_DEBUGGER_WEBSOCKET_PONG = 10, /**< reply to ping frame */
 } jerry_websocket_opcode_type_t;
 
 /**
@@ -143,8 +150,8 @@ jerry_to_base64 (const uint8_t *source_p, /**< source data */
 /**
  * Process WebSocket handshake.
  *
- * @return true - is no error is occured
- *         false - otherwise
+ * @return true if the handshake is completed successfully
+ *         false otherwise
  */
 static bool
 jerry_process_handshake (int client_socket, /**< client socket */
@@ -168,7 +175,7 @@ jerry_process_handshake (int client_socket, /**< client socket */
 
     if (size < 0)
     {
-      jerry_debugger_close_connection (true);
+      jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Error: %s\n", strerror (errno));
       return false;
     }
 
@@ -253,12 +260,8 @@ jerry_process_handshake (int client_socket, /**< client socket */
 
   text_p = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ";
 
-  if (!jerry_debugger_send ((const uint8_t *) text_p, strlen (text_p)))
-  {
-    return false;
-  }
-
-  if (!jerry_debugger_send (request_buffer_p + sha1_length + 1, 27))
+  if (!jerry_debugger_send ((const uint8_t *) text_p, strlen (text_p))
+      || !jerry_debugger_send (request_buffer_p + sha1_length + 1, 27))
   {
     return false;
   }
@@ -280,10 +283,13 @@ jerry_debugger_accept_connection ()
   struct sockaddr_in addr;
   socklen_t sin_size = sizeof (struct sockaddr_in);
 
-  JERRY_CONTEXT (debugger_connection) = -1;
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
+  /* Disable debugger flag temporarily. */
+  JERRY_CONTEXT (jerry_init_flags) &= (uint32_t) ~JERRY_INIT_DEBUGGER;
 
   addr.sin_family = AF_INET;
-  addr.sin_port = htons (PORT);
+  addr.sin_port = htons (JERRY_DEBUGGER_PORT);
   addr.sin_addr.s_addr = INADDR_ANY;
 
   if ((server_socket = socket (AF_INET, SOCK_STREAM, 0)) == -1)
@@ -328,6 +334,9 @@ jerry_debugger_accept_connection ()
 
   close (server_socket);
 
+  /* Enable debugger flag again. */
+  JERRY_CONTEXT (jerry_init_flags) |= JERRY_INIT_DEBUGGER;
+
   size_t request_buffer_size = 1024;
   bool is_handshake_ok = false;
 
@@ -347,6 +356,7 @@ jerry_debugger_accept_connection ()
 
   JERRY_DEBUGGER_SEND_MESSAGE (jerry_debugger_message_send_configuration_t, configuration_p);
 
+  /* Helper structure for endianness check. */
   union
   {
     uint16_t uint16_value; /**< a 16 bit value */
@@ -355,9 +365,10 @@ jerry_debugger_accept_connection ()
 
   endian_data.uint16_value = 1;
 
-  configuration_p->header.ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
-  configuration_p->header.size = 1 + 1 + 1;
+  configuration_p->header.ws_opcode = JERRY_DEBUGGER_WEBSOCKET_FIN_BIT | JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME;
+  configuration_p->header.size = JERRY_DEBUGGER_PACKET_SIZE (jerry_debugger_message_send_configuration_t);
   configuration_p->header.type = (uint8_t) JERRY_DEBUGGER_CONFIGURATION;
+  configuration_p->max_message_size = JERRY_DEBUGGER_MAX_BUFFER_SIZE - JERRY_DEBUGGER_WEBSOCKET_RECEIVE_HEADER_SIZE;
   configuration_p->cpointer_size = sizeof (jmem_cpointer_t);
   configuration_p->little_endian = (endian_data.uint8_value[0] == 1);
 
@@ -381,8 +392,7 @@ jerry_debugger_accept_connection ()
     return false;
   }
 
-  jerry_port_log (JERRY_LOG_LEVEL_DEBUG, "Connected from: %s:%d\n",
-                  inet_ntoa (addr.sin_addr), ntohs (addr.sin_port));
+  jerry_port_log (JERRY_LOG_LEVEL_DEBUG, "Connected from: %s\n", inet_ntoa (addr.sin_addr));
 
   JERRY_CONTEXT (debugger_stop_exec) = true;
   JERRY_CONTEXT (debugger_stop_context) = NULL;
@@ -396,16 +406,36 @@ jerry_debugger_accept_connection ()
 void
 jerry_debugger_close_connection (bool log_error) /**< log error */
 {
-  if (JERRY_CONTEXT (debugger_connection) != -1)
-  {
-    if (log_error)
-    {
-      jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Error: %s\n", strerror (errno));
-    }
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
 
-    close (JERRY_CONTEXT (debugger_connection));
+  JERRY_CONTEXT (jerry_init_flags) &= (uint32_t) ~JERRY_INIT_DEBUGGER;
+
+  if (log_error)
+  {
+    jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Error: %s\n", strerror (errno));
   }
+
+  jerry_port_log (JERRY_LOG_LEVEL_DEBUG, "Debugger client connection closed.\n");
+
+  close (JERRY_CONTEXT (debugger_connection));
   JERRY_CONTEXT (debugger_connection) = -1;
+
+  jerry_debugger_byte_code_free_t *byte_code_free_p;
+
+  byte_code_free_p = JMEM_CP_GET_POINTER (jerry_debugger_byte_code_free_t,
+                                          JERRY_CONTEXT (debugger_byte_code_free_head));
+
+  while (byte_code_free_p != NULL)
+  {
+    jerry_debugger_byte_code_free_t *next_byte_code_free_p;
+    next_byte_code_free_p = JMEM_CP_GET_POINTER (jerry_debugger_byte_code_free_t,
+                                                 byte_code_free_p->next_cp);
+
+    jmem_heap_free_block (byte_code_free_p,
+                          ((size_t) byte_code_free_p->size) << JMEM_ALIGNMENT_LOG);
+
+    byte_code_free_p = next_byte_code_free_p;
+  }
 } /* jerry_debugger_close_connection */
 
 /**
@@ -426,10 +456,8 @@ jerry_debugger_send_backtrace (void)
 
   JERRY_DEBUGGER_SEND_MESSAGE (jerry_debugger_message_send_backtrace_t, backtrace_p);
 
-  size_t message_size = JERRY_DEBUGGER_MAX_SIZE (jerry_debugger_frame_t) * sizeof (jerry_debugger_frame_t);
-
-  backtrace_p->header.ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
-  backtrace_p->header.size = (uint8_t) (1 + message_size);
+  backtrace_p->header.ws_opcode = JERRY_DEBUGGER_WEBSOCKET_FIN_BIT | JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME;
+  backtrace_p->header.size = JERRY_DEBUGGER_PACKET_SIZE (jerry_debugger_message_send_backtrace_t);
   backtrace_p->header.type = (uint8_t) JERRY_DEBUGGER_BACKTRACE;
 
   vm_frame_ctx_t *frame_ctx_p = JERRY_CONTEXT (vm_top_context_p);
@@ -440,8 +468,11 @@ jerry_debugger_send_backtrace (void)
   {
     if (current_frame >= JERRY_DEBUGGER_MAX_SIZE (jerry_debugger_frame_t))
     {
-      jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
-                           sizeof (jerry_debugger_message_send_backtrace_t));
+      if (!jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
+                                sizeof (jerry_debugger_message_send_backtrace_t)))
+      {
+        return;
+      }
       current_frame = 0;
     }
 
@@ -459,7 +490,7 @@ jerry_debugger_send_backtrace (void)
     max_depth--;
   }
 
-  message_size = current_frame * sizeof (jerry_debugger_frame_t);
+  size_t message_size = current_frame * sizeof (jerry_debugger_frame_t);
 
   backtrace_p->header.size = (uint8_t) (1 + message_size);
   backtrace_p->header.type = (uint8_t) JERRY_DEBUGGER_BACKTRACE_END;
@@ -467,6 +498,17 @@ jerry_debugger_send_backtrace (void)
   jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
                        3 + message_size);
 } /* jerry_debugger_send_backtrace */
+
+/**
+ * Check received packet size.
+ */
+#define JERRY_DEBUGGER_CHECK_PACKET_SIZE(type) \
+  if (message_size != (sizeof (type) - JERRY_DEBUGGER_WEBSOCKET_RECEIVE_HEADER_SIZE)) \
+  { \
+    jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Invalid message size\n"); \
+    jerry_debugger_close_connection (false); \
+    return true; \
+  }
 
 /**
  * Receive message from the client.
@@ -477,6 +519,8 @@ jerry_debugger_send_backtrace (void)
 bool
 jerry_debugger_receive (void)
 {
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
   JERRY_CONTEXT (debugger_message_delay) = JERRY_DEBUGGER_MESSAGE_FREQUENCY;
 
   uint8_t *recv_buffer_p = JERRY_CONTEXT (debugger_receive_buffer);
@@ -484,11 +528,6 @@ jerry_debugger_receive (void)
 
   while (true)
   {
-    if (JERRY_CONTEXT (debugger_connection) == -1)
-    {
-      return true;
-    }
-
     ssize_t byte_recv = recv (JERRY_CONTEXT (debugger_connection),
                               recv_buffer_p + JERRY_CONTEXT (debugger_receive_buffer_offset),
                               JERRY_DEBUGGER_MAX_BUFFER_SIZE - JERRY_CONTEXT (debugger_receive_buffer_offset),
@@ -507,41 +546,41 @@ jerry_debugger_receive (void)
 
     JERRY_CONTEXT (debugger_receive_buffer_offset) += (uint32_t) byte_recv;
 
-    if (JERRY_CONTEXT (debugger_receive_buffer_offset) < WEBSOCKET_HEADER_TOTAL_SIZE)
+    if (JERRY_CONTEXT (debugger_receive_buffer_offset) < JERRY_DEBUGGER_WEBSOCKET_RECEIVE_HEADER_SIZE)
     {
       return resume_exec;
     }
 
-    const size_t max_packet_size = JERRY_DEBUGGER_MAX_BUFFER_SIZE - WEBSOCKET_HEADER_TOTAL_SIZE;
+    const size_t max_packet_size = JERRY_DEBUGGER_MAX_BUFFER_SIZE - JERRY_DEBUGGER_WEBSOCKET_RECEIVE_HEADER_SIZE;
 
     JERRY_ASSERT (max_packet_size < 126);
 
-    if ((recv_buffer_p[0] & ~WEBSOCKET_OPCODE_MASK) != WEBSOCKET_FIN_BIT
-        || (recv_buffer_p[1] & WEBSOCKET_LENGTH_MASK) >= max_packet_size
-        || !(recv_buffer_p[1] & WEBSOCKET_MASK_BIT))
+    if ((recv_buffer_p[0] & ~JERRY_DEBUGGER_WEBSOCKET_OPCODE_MASK) != JERRY_DEBUGGER_WEBSOCKET_FIN_BIT
+        || (recv_buffer_p[1] & JERRY_DEBUGGER_WEBSOCKET_LENGTH_MASK) >= max_packet_size
+        || !(recv_buffer_p[1] & JERRY_DEBUGGER_WEBSOCKET_MASK_BIT))
     {
       jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Unsupported message.\n");
       jerry_debugger_close_connection (false);
       return true;
     }
 
-    if ((recv_buffer_p[0] & WEBSOCKET_OPCODE_MASK) != WEBSOCKET_BINARY_FRAME)
+    if ((recv_buffer_p[0] & JERRY_DEBUGGER_WEBSOCKET_OPCODE_MASK) != JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME)
     {
       jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Unsupported websocket opcode.\n");
       jerry_debugger_close_connection (false);
       return true;
     }
 
-    uint32_t message_size = (uint32_t) (recv_buffer_p[1] & WEBSOCKET_LENGTH_MASK);
-    uint32_t message_total_size = message_size + WEBSOCKET_HEADER_TOTAL_SIZE;
+    uint32_t message_size = (uint32_t) (recv_buffer_p[1] & JERRY_DEBUGGER_WEBSOCKET_LENGTH_MASK);
+    uint32_t message_total_size = message_size + JERRY_DEBUGGER_WEBSOCKET_RECEIVE_HEADER_SIZE;
 
     if (JERRY_CONTEXT (debugger_receive_buffer_offset) < message_total_size)
     {
       return resume_exec;
     }
 
-    const uint8_t *mask_p = recv_buffer_p + WEBSOCKET_HEADER_SIZE;
-    uint8_t *data_p = recv_buffer_p + WEBSOCKET_HEADER_TOTAL_SIZE;
+    const uint8_t *mask_p = recv_buffer_p + JERRY_DEBUGGER_WEBSOCKET_HEADER_SIZE;
+    uint8_t *data_p = recv_buffer_p + JERRY_DEBUGGER_WEBSOCKET_RECEIVE_HEADER_SIZE;
     const uint8_t *mask_end_p = data_p;
     const uint8_t *data_end_p = data_p + message_size;
 
@@ -554,15 +593,58 @@ jerry_debugger_receive (void)
 
       if (mask_p >= mask_end_p)
       {
-        mask_p -= WEBSOCKET_MASK_SIZE;
+        mask_p -= JERRY_DEBUGGER_WEBSOCKET_MASK_SIZE;
       }
     }
 
-    /* Process message */
-    switch (recv_buffer_p[WEBSOCKET_HEADER_TOTAL_SIZE])
+    /* Process the received message. */
+    switch (recv_buffer_p[JERRY_DEBUGGER_WEBSOCKET_RECEIVE_HEADER_SIZE])
     {
+      case JERRY_DEBUGGER_FREE_BYTE_CODE_CP:
+      {
+        JERRY_DEBUGGER_CHECK_PACKET_SIZE (jerry_debugger_message_receive_byte_code_cp_t);
+
+        JERRY_DEBUGGER_RECEIVE_MESSAGE (jerry_debugger_message_receive_byte_code_cp_t, byte_code_p);
+
+        jmem_cpointer_t byte_code_free_cp;
+        memcpy (&byte_code_free_cp, byte_code_p->byte_code_cp, sizeof (jmem_cpointer_t));
+
+        jerry_debugger_byte_code_free_t *byte_code_free_p;
+        byte_code_free_p = JMEM_CP_GET_NON_NULL_POINTER (jerry_debugger_byte_code_free_t,
+                                                         byte_code_free_cp);
+
+        if (JERRY_CONTEXT (debugger_byte_code_free_head) == byte_code_free_cp)
+        {
+          JERRY_CONTEXT (debugger_byte_code_free_head) = byte_code_free_p->next_cp;
+        }
+
+        if (byte_code_free_p->prev_cp != ECMA_NULL_POINTER)
+        {
+          jerry_debugger_byte_code_free_t *prev_byte_code_free_p;
+          prev_byte_code_free_p = JMEM_CP_GET_NON_NULL_POINTER (jerry_debugger_byte_code_free_t,
+                                                                byte_code_free_p->prev_cp);
+
+          prev_byte_code_free_p->next_cp = byte_code_free_p->next_cp;
+        }
+
+        if (byte_code_free_p->next_cp != ECMA_NULL_POINTER)
+        {
+          jerry_debugger_byte_code_free_t *next_byte_code_free_p;
+          next_byte_code_free_p = JMEM_CP_GET_NON_NULL_POINTER (jerry_debugger_byte_code_free_t,
+                                                                byte_code_free_p->next_cp);
+
+          next_byte_code_free_p->prev_cp = byte_code_free_p->prev_cp;
+        }
+
+        jmem_heap_free_block (byte_code_free_p,
+                              ((size_t) byte_code_free_p->size) << JMEM_ALIGNMENT_LOG);
+        break;
+      }
+
       case JERRY_DEBUGGER_UPDATE_BREAKPOINT:
       {
+        JERRY_DEBUGGER_CHECK_PACKET_SIZE (jerry_debugger_message_receive_update_breakpoint_t);
+
         JERRY_DEBUGGER_RECEIVE_MESSAGE (jerry_debugger_message_receive_update_breakpoint_t, update_breakpoint_p);
 
         jmem_cpointer_t byte_code_cp;
@@ -580,6 +662,8 @@ jerry_debugger_receive (void)
       }
       case JERRY_DEBUGGER_STOP:
       {
+        JERRY_DEBUGGER_CHECK_PACKET_SIZE (jerry_debugger_receive_message_header_t);
+
         JERRY_CONTEXT (debugger_stop_exec) = true;
         JERRY_CONTEXT (debugger_stop_context) = NULL;
         resume_exec = false;
@@ -587,6 +671,8 @@ jerry_debugger_receive (void)
       }
       case JERRY_DEBUGGER_CONTINUE:
       {
+        JERRY_DEBUGGER_CHECK_PACKET_SIZE (jerry_debugger_receive_message_header_t);
+
         JERRY_CONTEXT (debugger_stop_exec) = false;
         JERRY_CONTEXT (debugger_stop_context) = NULL;
         resume_exec = true;
@@ -594,6 +680,8 @@ jerry_debugger_receive (void)
       }
       case JERRY_DEBUGGER_STEP:
       {
+        JERRY_DEBUGGER_CHECK_PACKET_SIZE (jerry_debugger_receive_message_header_t);
+
         JERRY_CONTEXT (debugger_stop_exec) = true;
         JERRY_CONTEXT (debugger_stop_context) = NULL;
         resume_exec = true;
@@ -601,6 +689,8 @@ jerry_debugger_receive (void)
       }
       case JERRY_DEBUGGER_NEXT:
       {
+        JERRY_DEBUGGER_CHECK_PACKET_SIZE (jerry_debugger_receive_message_header_t);
+
         JERRY_CONTEXT (debugger_stop_exec) = true;
         JERRY_CONTEXT (debugger_stop_context) = JERRY_CONTEXT (vm_top_context_p);
         resume_exec = true;
@@ -608,8 +698,16 @@ jerry_debugger_receive (void)
       }
       case JERRY_DEBUGGER_GET_BACKTRACE:
       {
+        JERRY_DEBUGGER_CHECK_PACKET_SIZE (jerry_debugger_message_receive_get_backtrace_t);
+
         jerry_debugger_send_backtrace ();
         break;
+      }
+      default:
+      {
+        jerry_port_log (JERRY_LOG_LEVEL_ERROR, "Unexpected message.");
+        jerry_debugger_close_connection (false);
+        return true;
       }
     }
 
@@ -624,6 +722,8 @@ jerry_debugger_receive (void)
   }
 } /* jerry_debugger_receive */
 
+#undef JERRY_DEBUGGER_CHECK_PACKET_SIZE
+
 /*
  * Send the message to the client side
  *
@@ -633,10 +733,7 @@ jerry_debugger_receive (void)
 bool jerry_debugger_send (const uint8_t *data_p, /**< data pointer */
                           size_t data_size) /**< data size */
 {
-  if (JERRY_CONTEXT (debugger_connection) == -1)
-  {
-    return false;
-  }
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
 
   do
   {
@@ -671,8 +768,8 @@ jerry_debugger_send_type (jerry_debugger_header_type_t type) /**< message type *
 
   JERRY_DEBUGGER_SEND_MESSAGE (jerry_debugger_send_message_header_t, message_header_p);
 
-  message_header_p->ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
-  message_header_p->size = 1;
+  message_header_p->ws_opcode = JERRY_DEBUGGER_WEBSOCKET_FIN_BIT | JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME;
+  message_header_p->size = JERRY_DEBUGGER_PACKET_SIZE (jerry_debugger_send_message_header_t);
   message_header_p->type = (uint8_t) type;
 
   jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
@@ -691,7 +788,7 @@ jerry_debugger_send_data (jerry_debugger_header_type_t type, /**< message type *
 
   JERRY_DEBUGGER_SEND_MESSAGE (jerry_debugger_send_message_header_t, message_header_p);
 
-  message_header_p->ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
+  message_header_p->ws_opcode = JERRY_DEBUGGER_WEBSOCKET_FIN_BIT | JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME;
   message_header_p->size = (uint8_t) (1 + size);
   message_header_p->type = type;
   memcpy (message_header_p + 1, data, size);
@@ -714,7 +811,7 @@ jerry_debugger_send_string (uint8_t message_type, /**< message type */
 
   JERRY_DEBUGGER_SEND_MESSAGE (jerry_debugger_message_send_string_t, message_string_p);
 
-  message_string_p->header.ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
+  message_string_p->header.ws_opcode = JERRY_DEBUGGER_WEBSOCKET_FIN_BIT | JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME;
   message_string_p->header.size = (uint8_t) (1 + max_fragment_len);
   message_string_p->header.type = message_type;
 
@@ -722,8 +819,11 @@ jerry_debugger_send_string (uint8_t message_type, /**< message type */
   {
     memcpy (message_string_p->string, string_p, max_fragment_len);
 
-    jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
-                         sizeof (jerry_debugger_message_send_string_t));
+    if (!jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
+                              sizeof (jerry_debugger_message_send_string_t)))
+    {
+      return;
+    }
 
     string_length -= max_fragment_len;
     string_p += max_fragment_len;
@@ -751,25 +851,28 @@ jerry_debugger_send_function_name (const jerry_char_t *function_name_p, /**< fun
 
 /**
  * Send the function compressed pointer to the client.
+ *
+ * @return true - if the data was send successfully to the client side
+ *         false - otherwise
  */
-void
+bool
 jerry_debugger_send_function_cp (jerry_debugger_header_type_t type, /**< message type */
                                  ecma_compiled_code_t *compiled_code_p) /**< byte code pointer */
 {
   JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
 
-  JERRY_DEBUGGER_SEND_MESSAGE (jerry_debugger_message_send_byte_code_cptr_t, byte_code_cptr_p);
+  JERRY_DEBUGGER_SEND_MESSAGE (jerry_debugger_message_send_byte_code_cp_t, byte_code_cp_p);
 
-  byte_code_cptr_p->header.ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
-  byte_code_cptr_p->header.size = 1 + sizeof (jmem_cpointer_t);
-  byte_code_cptr_p->header.type = (uint8_t) type;
+  byte_code_cp_p->header.ws_opcode = JERRY_DEBUGGER_WEBSOCKET_FIN_BIT | JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME;
+  byte_code_cp_p->header.size = JERRY_DEBUGGER_PACKET_SIZE (jerry_debugger_message_send_byte_code_cp_t);
+  byte_code_cp_p->header.type = (uint8_t) type;
 
   jmem_cpointer_t compiled_code_cp;
   JMEM_CP_SET_NON_NULL_POINTER (compiled_code_cp, compiled_code_p);
-  memcpy (byte_code_cptr_p->byte_code_cp, &compiled_code_cp, sizeof (jmem_cpointer_t));
+  memcpy (byte_code_cp_p->byte_code_cp, &compiled_code_cp, sizeof (jmem_cpointer_t));
 
-  jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
-                       sizeof (jerry_debugger_message_send_byte_code_cptr_t));
+  return jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
+                              sizeof (jerry_debugger_message_send_byte_code_cp_t));
 } /* jerry_debugger_send_function_cp */
 
 /**
@@ -778,23 +881,28 @@ jerry_debugger_send_function_cp (jerry_debugger_header_type_t type, /**< message
 void
 jerry_debugger_breakpoint_hit (void)
 {
+  JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+
   JERRY_DEBUGGER_SEND_MESSAGE (jerry_debugger_message_send_breakpoint_hit_t, breakpoint_hit_p);
 
-  breakpoint_hit_p->header.ws_opcode = WEBSOCKET_FIN_BIT | WEBSOCKET_BINARY_FRAME;
-  breakpoint_hit_p->header.size = 1 + sizeof (jmem_cpointer_t) + sizeof (uint32_t);
+  breakpoint_hit_p->header.ws_opcode = JERRY_DEBUGGER_WEBSOCKET_FIN_BIT | JERRY_DEBUGGER_WEBSOCKET_BINARY_FRAME;
+  breakpoint_hit_p->header.size = JERRY_DEBUGGER_PACKET_SIZE (jerry_debugger_message_send_breakpoint_hit_t);
   breakpoint_hit_p->header.type = (uint8_t) JERRY_DEBUGGER_BREAKPOINT_HIT;
 
   vm_frame_ctx_t *frame_ctx_p = JERRY_CONTEXT (vm_top_context_p);
 
-  jmem_cpointer_t bytecode_header_cp;
-  JMEM_CP_SET_NON_NULL_POINTER (bytecode_header_cp, frame_ctx_p->bytecode_header_p);
-  memcpy (breakpoint_hit_p->byte_code_cp, &bytecode_header_cp, sizeof (jmem_cpointer_t));
+  jmem_cpointer_t byte_code_header_cp;
+  JMEM_CP_SET_NON_NULL_POINTER (byte_code_header_cp, frame_ctx_p->bytecode_header_p);
+  memcpy (breakpoint_hit_p->byte_code_cp, &byte_code_header_cp, sizeof (jmem_cpointer_t));
 
   uint32_t offset = (uint32_t) (frame_ctx_p->byte_code_p - (uint8_t *) frame_ctx_p->bytecode_header_p);
   memcpy (breakpoint_hit_p->offset, &offset, sizeof (uint32_t));
 
-  jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
-                       sizeof (jerry_debugger_message_send_breakpoint_hit_t));
+  if (!jerry_debugger_send (JERRY_CONTEXT (debugger_send_buffer),
+                            sizeof (jerry_debugger_message_send_breakpoint_hit_t)))
+  {
+    return;
+  }
 
   while (!jerry_debugger_receive ())
   {

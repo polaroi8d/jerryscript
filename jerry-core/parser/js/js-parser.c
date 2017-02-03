@@ -2051,7 +2051,6 @@ parser_parse_function (parser_context_t *context_p, /**< context */
   {
     if (context_p->line != context_p->last_breakpoint_line)
     {
-      JERRY_DEBUG_MSG ("Insert function breakpoint: %d (%d)\n", context_p->line, context_p->last_breakpoint_line);
       parser_emit_cbc (context_p, CBC_BREAKPOINT_DISABLED);
       parser_flush_cbc (context_p);
 

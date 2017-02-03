@@ -2307,7 +2307,10 @@ vm_loop (vm_frame_ctx_t *frame_ctx_p) /**< frame context */
         case VM_OC_BREAKPOINT_ENABLED:
         {
 #ifdef JERRY_DEBUGGER
-          JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+          if (!(JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER))
+          {
+            continue;
+          }
 
           frame_ctx_p->byte_code_p = byte_code_start_p;
 
@@ -2318,7 +2321,10 @@ vm_loop (vm_frame_ctx_t *frame_ctx_p) /**< frame context */
         case VM_OC_BREAKPOINT_DISABLED:
         {
 #ifdef JERRY_DEBUGGER
-          JERRY_ASSERT (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER);
+          if (!(JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER))
+          {
+            continue;
+          }
 
           frame_ctx_p->byte_code_p = byte_code_start_p;
 

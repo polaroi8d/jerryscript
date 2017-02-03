@@ -21,17 +21,18 @@ var JERRY_DEBUGGER_BREAKPOINT_LIST = 5;
 var JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 6;
 var JERRY_DEBUGGER_RESOURCE_NAME = 7;
 var JERRY_DEBUGGER_FUNCTION_NAME = 8;
-var JERRY_DEBUGGER_FREE_BYTE_CODE_CP = 9;
+var JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 9;
 var JERRY_DEBUGGER_BREAKPOINT_HIT = 10;
 var JERRY_DEBUGGER_BACKTRACE = 11;
 var JERRY_DEBUGGER_BACKTRACE_END = 12;
 
-var JERRY_DEBUGGER_UPDATE_BREAKPOINT = 0;
-var JERRY_DEBUGGER_STOP = 1;
-var JERRY_DEBUGGER_CONTINUE = 2;
-var JERRY_DEBUGGER_STEP = 3;
-var JERRY_DEBUGGER_NEXT = 4;
-var JERRY_DEBUGGER_GET_BACKTRACE = 5;
+var JERRY_DEBUGGER_FREE_BYTE_CODE_CP = 1;
+var JERRY_DEBUGGER_UPDATE_BREAKPOINT = 2;
+var JERRY_DEBUGGER_STOP = 3;
+var JERRY_DEBUGGER_CONTINUE = 4;
+var JERRY_DEBUGGER_STEP = 5;
+var JERRY_DEBUGGER_NEXT = 6;
+var JERRY_DEBUGGER_GET_BACKTRACE = 7;
 
 var textBox = document.getElementById("log");
 var commandBox = document.getElementById("command");
@@ -52,6 +53,7 @@ function DebuggerClient(ipAddr)
   appendLog("ws://" + ipAddr + ":5001/jerry-debugger");
 
   var parseObj = null;
+  var maxMessageSize = 0;
   var cpointerSize = 0;
   var littleEndian = true;
   var functions = { };
@@ -524,13 +526,14 @@ function DebuggerClient(ipAddr)
     if (cpointerSize == 0)
     {
       if (message[0] != JERRY_DEBUGGER_CONFIGURATION
-          || message.byteLength != 3)
+          || message.byteLength != 4)
       {
         abortConnection("the first message must be configuration.");
       }
 
-      cpointerSize = message[1]
-      littleEndian = (message[2] != 0);
+      maxMessageSize = message[1]
+      cpointerSize = message[2]
+      littleEndian = (message[3] != 0);
 
       if (cpointerSize != 2 && cpointerSize != 4)
       {
@@ -550,17 +553,18 @@ function DebuggerClient(ipAddr)
     switch (message[0])
     {
       case JERRY_DEBUGGER_PARSE_ERROR:
+      case JERRY_DEBUGGER_BYTE_CODE_CP:
+      case JERRY_DEBUGGER_PARSE_FUNCTION:
+      case JERRY_DEBUGGER_BREAKPOINT_LIST:
       case JERRY_DEBUGGER_RESOURCE_NAME:
       case JERRY_DEBUGGER_FUNCTION_NAME:
-      case JERRY_DEBUGGER_PARSE_FUNCTION:
-      case JERRY_DEBUGGER_BYTE_CODE_CP:
       {
         parseObj = new ParseSource()
         parseObj.receive(message)
         return;
       }
 
-      case JERRY_DEBUGGER_FREE_BYTE_CODE_CP:
+      case JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP:
       {
         var byte_code_cp = decodeMessage("C", message, 1)[0];
 
@@ -581,6 +585,9 @@ function DebuggerClient(ipAddr)
         }
 
         delete functions[byte_code_cp];
+
+        message[0] = JERRY_DEBUGGER_FREE_BYTE_CODE_CP;
+        socket.send(message);
         return;
       }
 
@@ -810,6 +817,8 @@ function debuggerCommand(event)
               "  next|n - connect to server\n" +
               "  backtrace|bt [max-depth] - get backtrace\n" +
               "  dump - dump all breakpoint data");
+
+    commandBox.value = "";
     return true;
   }
 

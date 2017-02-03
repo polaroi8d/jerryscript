@@ -1437,13 +1437,6 @@ ecma_bytecode_deref (ecma_compiled_code_t *bytecode_p) /**< byte code pointer */
 
   if (bytecode_p->status_flags & CBC_CODE_FLAGS_FUNCTION)
   {
-#ifdef JERRY_DEBUGGER
-    if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
-    {
-      jerry_debugger_send_function_cp (JERRY_DEBUGGER_FREE_BYTE_CODE_CP, bytecode_p);
-    }
-#endif /* JERRY_DEBUGGER */
-
     jmem_cpointer_t *literal_start_p = NULL;
     uint32_t literal_end;
     uint32_t const_literal_end;
@@ -1479,6 +1472,37 @@ ecma_bytecode_deref (ecma_compiled_code_t *bytecode_p) /**< byte code pointer */
         ecma_bytecode_deref (bytecode_literal_p);
       }
     }
+
+#ifdef JERRY_DEBUGGER
+    if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
+    {
+      if (jerry_debugger_send_function_cp (JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP, bytecode_p))
+      {
+        /* Delay the byte code free until the debugger client is notified.
+         * If the connection is aborted the pointer is still freed by
+         * jerry_debugger_close_connection(). */
+        jerry_debugger_byte_code_free_t *byte_code_free_p = (jerry_debugger_byte_code_free_t *) bytecode_p;
+        jmem_cpointer_t byte_code_free_head = JERRY_CONTEXT (debugger_byte_code_free_head);
+
+        byte_code_free_p->prev_cp = ECMA_NULL_POINTER;
+        byte_code_free_p->next_cp = byte_code_free_head;
+
+        JMEM_CP_SET_NON_NULL_POINTER (JERRY_CONTEXT (debugger_byte_code_free_head),
+                                      byte_code_free_p);
+
+        if (byte_code_free_head != ECMA_NULL_POINTER)
+        {
+          jerry_debugger_byte_code_free_t *next_byte_code_free_p;
+
+          next_byte_code_free_p = JMEM_CP_GET_NON_NULL_POINTER (jerry_debugger_byte_code_free_t,
+                                                                byte_code_free_head);
+
+          next_byte_code_free_p->prev_cp = JERRY_CONTEXT (debugger_byte_code_free_head);
+        }
+        return;
+      }
+    }
+#endif /* JERRY_DEBUGGER */
   }
   else
   {

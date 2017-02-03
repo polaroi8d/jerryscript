@@ -1706,7 +1706,6 @@ parser_parse_statements (parser_context_t *context_p) /**< context */
           && context_p->token.type != LEXER_KEYW_CASE
           && context_p->token.type != LEXER_KEYW_DEFAULT)
       {
-        JERRY_DEBUG_MSG ("Insert breakpoint: %d (%d)\n", context_p->line, context_p->last_breakpoint_line);
         parser_emit_cbc (context_p, CBC_BREAKPOINT_DISABLED);
         parser_flush_cbc (context_p);
 
