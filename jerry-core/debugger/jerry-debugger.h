@@ -18,21 +18,15 @@
 
 #ifdef JERRY_DEBUGGER
 
+#include "jerry-debugger-ws.h"
 #include "ecma-globals.h"
 
 /* Jerry debugger protocol is the simplified version of RFC-6455 (WebSockets). */
 
-#define JERRY_DEBUGGER_MAX_BUFFER_SIZE 128
-
+/**
+ * Frequency of calling jerry_debugger_receive() by the vm.
+ */
 #define JERRY_DEBUGGER_MESSAGE_FREQUENCY 5
-
-bool jerry_debugger_accept_connection (void);
-void jerry_debugger_close_connection (bool log_error);
-bool jerry_debugger_send (const uint8_t *data_p, size_t data_size);
-
-void jerry_debugger_compute_sha1 (const uint8_t *input1, size_t input1_len,
-                                  const uint8_t *input2, size_t input2_len,
-                                  uint8_t output[20]);
 
 /**
  * Limited resources available for the engine, so it is important to
@@ -44,22 +38,10 @@ void jerry_debugger_compute_sha1 (const uint8_t *input1, size_t input1_len,
 
 /**
  * Calculate the maximum number of items for a given type
- * can one message hold.
+ * which can be transmitted by one message.
  */
 #define JERRY_DEBUGGER_MAX_SIZE(type) \
- ((JERRY_DEBUGGER_MAX_BUFFER_SIZE - sizeof (jerry_debugger_send_message_header_t)) / sizeof (type))
-
-/**
- * Type cast the debugger send buffer into a specific type.
- */
-#define JERRY_DEBUGGER_SEND_MESSAGE(type, name_p) \
-  type *name_p = ((type *) &JERRY_CONTEXT (debugger_send_buffer))
-
-/**
- * Type cast the debugger receive buffer into a specific type.
- */
-#define JERRY_DEBUGGER_RECEIVE_MESSAGE(type, name_p) \
-  type *name_p = ((type *) &JERRY_CONTEXT (debugger_receive_buffer))
+ ((JERRY_DEBUGGER_MAX_BUFFER_SIZE - sizeof (jerry_debugger_send_header_t) - 1) / sizeof (type))
 
 /**
  * Types for the package.
@@ -101,84 +83,84 @@ typedef struct
 } jerry_debugger_byte_code_free_t;
 
 /**
- * Header for outgoing packets.
- */
-typedef struct
-{
-  uint8_t ws_opcode; /**< websocket opcode */
-  uint8_t size; /**< size of the message */
-  uint8_t type; /**< type of the message */
-} jerry_debugger_send_message_header_t;
-
-/**
- * Header for incoming packets.
- */
-typedef struct
-{
-  uint8_t ws_opcode; /**< websocket opcode */
-  uint8_t size; /**< size of the message */
-  uint8_t mask[4]; /**< mask bytes */
-  uint8_t type; /**< type of the message */
-} jerry_debugger_receive_message_header_t;
-
-/**
  * Outgoing message: JerryScript configuration.
  */
 typedef struct
 {
-  jerry_debugger_send_message_header_t header; /**< message header */
+  jerry_debugger_send_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
   uint8_t max_message_size; /**< maximum incoming message size */
   uint8_t cpointer_size; /**< size of compressed pointers */
   uint8_t little_endian; /**< little endian machine */
-} jerry_debugger_message_send_configuration_t;
+} jerry_debugger_send_configuration_t;
+
+/**
+ * Outgoing message: message without arguments.
+ */
+typedef struct
+{
+  jerry_debugger_send_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
+} jerry_debugger_send_type_t;
+
+/**
+ * Incoming message: message without arguments.
+ */
+typedef struct
+{
+  uint8_t type; /**< type of the message */
+} jerry_debugger_receive_type_t;
 
 /**
  * Outgoing message: string (Source file name or function name).
  */
 typedef struct
 {
-  jerry_debugger_send_message_header_t header; /**< message header */
+  jerry_debugger_send_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
   uint8_t string[JERRY_DEBUGGER_MAX_SIZE (uint8_t)]; /**< string data */
-} jerry_debugger_message_send_string_t;
+} jerry_debugger_send_string_t;
 
 /**
  * Outgoing message: byte code compressed pointer.
  */
 typedef struct
 {
-  jerry_debugger_send_message_header_t header; /**< message header */
+  jerry_debugger_send_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
   uint8_t byte_code_cp[sizeof (jmem_cpointer_t)]; /**< byte code compressed pointer */
-} jerry_debugger_message_send_byte_code_cp_t;
+} jerry_debugger_send_byte_code_cp_t;
 
 /**
  * Incoming message: byte code compressed pointer.
  */
 typedef struct
 {
-  jerry_debugger_receive_message_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
   uint8_t byte_code_cp[sizeof (jmem_cpointer_t)]; /**< byte code compressed pointer */
-} jerry_debugger_message_receive_byte_code_cp_t;
+} jerry_debugger_receive_byte_code_cp_t;
 
 /**
  * Incoming message: update (enable/disable) breakpoint status.
  */
 typedef struct
 {
-  jerry_debugger_receive_message_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
   uint8_t is_set_breakpoint; /**< set or clear breakpoint */
   uint8_t byte_code_cp[sizeof (jmem_cpointer_t)]; /**< byte code compressed pointer */
   uint8_t offset[sizeof (uint32_t)]; /**< breakpoint offset */
-} jerry_debugger_message_receive_update_breakpoint_t;
+} jerry_debugger_receive_update_breakpoint_t;
 
 /**
  * Outgoing message: notify breakpoint hit.
  */
 typedef struct
 {
-  jerry_debugger_send_message_header_t header; /**< message header */
+  jerry_debugger_send_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
   uint8_t byte_code_cp[sizeof (jmem_cpointer_t)]; /**< byte code compressed pointer */
   uint8_t offset[sizeof (uint32_t)]; /**< breakpoint offset */
-} jerry_debugger_message_send_breakpoint_hit_t;
+} jerry_debugger_send_breakpoint_hit_t;
 
 /**
  * Stack frame descriptor for sending backtrace information.
@@ -194,28 +176,32 @@ typedef struct
  */
 typedef struct
 {
-  jerry_debugger_send_message_header_t header; /**< message header */
+  jerry_debugger_send_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
   jerry_debugger_frame_t frames[JERRY_DEBUGGER_MAX_SIZE (jerry_debugger_frame_t)]; /**< frames */
-} jerry_debugger_message_send_backtrace_t;
+} jerry_debugger_send_backtrace_t;
 
 /**
  * Incoming message: get backtrace.
  */
 typedef struct
 {
-  jerry_debugger_receive_message_header_t header; /**< message header */
+  uint8_t type; /**< type of the message */
   uint8_t max_depth[sizeof (uint32_t)]; /**< maximum depth (0 - unlimited) */
-} jerry_debugger_message_receive_get_backtrace_t;
+} jerry_debugger_receive_get_backtrace_t;
 
-bool jerry_debugger_receive (void);
+void jerry_debugger_free_unreferenced_byte_code (void);
+
+bool jerry_debugger_process_message (uint8_t *recv_buffer_p, uint32_t message_size, bool *resume_exec_p);
+void jerry_debugger_breakpoint_hit (void);
+
 void jerry_debugger_send_type (jerry_debugger_header_type_t type);
+bool jerry_debugger_send_configuration (uint8_t max_message_size);
 void jerry_debugger_send_data (jerry_debugger_header_type_t type, const void *data, size_t size);
 void jerry_debugger_send_string (uint8_t message_type, const jerry_char_t *string_p, size_t string_length);
 void jerry_debugger_send_function_name (const jerry_char_t *function_name_p, size_t function_name_length);
 bool jerry_debugger_send_function_cp (jerry_debugger_header_type_t type, ecma_compiled_code_t *compiled_code_p);
 void jerry_debugger_send_source_file_name (const jerry_char_t *file_name_p, size_t file_name_length);
-
-void jerry_debugger_breakpoint_hit (void);
 
 #endif /* JERRY_DEBUGGER */
 

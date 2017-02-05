@@ -177,7 +177,7 @@ jerry_cleanup (void)
 #ifdef JERRY_DEBUGGER
   if (JERRY_CONTEXT (jerry_init_flags) & JERRY_INIT_DEBUGGER)
   {
-    jerry_debugger_close_connection (false);
+    jerry_debugger_close_connection ();
   }
 #endif /* JERRY_DEBUGGER */
 
