@@ -352,7 +352,7 @@ jerry_debugger_accept_connection ()
     return false;
   }
 
-  jerry_port_log (JERRY_LOG_LEVEL_DEBUG, "Waiting for the client connection.\n");
+  jerry_port_log (JERRY_LOG_LEVEL_DEBUG, "Waiting for client connection\n");
 
   JERRY_CONTEXT (debugger_connection) = accept (server_socket, (struct sockaddr *)&addr, &sin_size);
 

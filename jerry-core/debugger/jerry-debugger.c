@@ -399,6 +399,7 @@ jerry_debugger_send_string (uint8_t message_type, /**< message type */
   }
 
   JERRY_DEBUGGER_SET_SEND_MESSAGE_SIZE (message_string_p, 1 + string_length);
+  message_string_p->type = (uint8_t) (message_type + 1);
 
   memcpy (message_string_p->string, string_p, string_length);
 

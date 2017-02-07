@@ -56,11 +56,13 @@ typedef enum
   JERRY_DEBUGGER_BREAKPOINT_LIST = 5, /**< list of line offsets */
   JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 6, /**< list of byte code offsets */
   JERRY_DEBUGGER_RESOURCE_NAME = 7, /**< resource name fragment */
-  JERRY_DEBUGGER_FUNCTION_NAME = 8, /**< function name fragment */
-  JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 9, /**< invalidate byte code compressed pointer */
-  JERRY_DEBUGGER_BREAKPOINT_HIT = 10, /**< notify breakpoint hit */
-  JERRY_DEBUGGER_BACKTRACE = 11, /**< backtrace data */
-  JERRY_DEBUGGER_BACKTRACE_END = 12, /**< last backtrace data */
+  JERRY_DEBUGGER_RESOURCE_NAME_END = 8, /**< resource name fragment */
+  JERRY_DEBUGGER_FUNCTION_NAME = 9, /**< function name fragment */
+  JERRY_DEBUGGER_FUNCTION_NAME_END = 10, /**< function name fragment */
+  JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 11, /**< invalidate byte code compressed pointer */
+  JERRY_DEBUGGER_BREAKPOINT_HIT = 12, /**< notify breakpoint hit */
+  JERRY_DEBUGGER_BACKTRACE = 13, /**< backtrace data */
+  JERRY_DEBUGGER_BACKTRACE_END = 14, /**< last backtrace data */
 
   /* Messages sent by the client to server. */
   JERRY_DEBUGGER_FREE_BYTE_CODE_CP = 1, /**< free byte code compressed pointer */

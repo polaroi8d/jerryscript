@@ -35,11 +35,13 @@ var JERRY_DEBUGGER_PARSE_FUNCTION = 4;
 var JERRY_DEBUGGER_BREAKPOINT_LIST = 5;
 var JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 6;
 var JERRY_DEBUGGER_RESOURCE_NAME = 7;
-var JERRY_DEBUGGER_FUNCTION_NAME = 8;
-var JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 9;
-var JERRY_DEBUGGER_BREAKPOINT_HIT = 10;
-var JERRY_DEBUGGER_BACKTRACE = 11;
-var JERRY_DEBUGGER_BACKTRACE_END = 12;
+var JERRY_DEBUGGER_RESOURCE_NAME_END = 8;
+var JERRY_DEBUGGER_FUNCTION_NAME = 9;
+var JERRY_DEBUGGER_FUNCTION_NAME_END = 10;
+var JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 11;
+var JERRY_DEBUGGER_BREAKPOINT_HIT = 12;
+var JERRY_DEBUGGER_BACKTRACE = 13;
+var JERRY_DEBUGGER_BACKTRACE_END = 14;
 
 var JERRY_DEBUGGER_FREE_BYTE_CODE_CP = 1;
 var JERRY_DEBUGGER_UPDATE_BREAKPOINT = 2;
@@ -416,6 +418,7 @@ function DebuggerClient(ipAddr)
         }
 
         case JERRY_DEBUGGER_RESOURCE_NAME:
+        case JERRY_DEBUGGER_RESOURCE_NAME_END:
         {
           if ((typeof resourceName) == "string")
           {
@@ -423,10 +426,16 @@ function DebuggerClient(ipAddr)
           }
 
           resourceName = concatUint8Arrays(resourceName, message);
+
+          if (message[0] == JERRY_DEBUGGER_RESOURCE_NAME_END)
+          {
+            resourceName = cesu8ToString(resourceName);
+          }
           return;
         }
 
         case JERRY_DEBUGGER_FUNCTION_NAME:
+        case JERRY_DEBUGGER_FUNCTION_NAME_END:
         {
           functionName = concatUint8Arrays(functionName, message);
           return;
@@ -434,9 +443,13 @@ function DebuggerClient(ipAddr)
 
         case JERRY_DEBUGGER_PARSE_FUNCTION:
         {
-          if ((typeof resourceName) != "string")
+          if (resourceName == null)
           {
-            resourceName = cesu8ToString(resourceName);
+            resourceName = "";
+          }
+          else if ((typeof resourceName) != "string")
+          {
+            abortConnection("unexpected message.");
           }
 
           stack.push({ name: cesu8ToString(functionName), resource: resourceName, lines: [], offsets: [] });
@@ -568,7 +581,9 @@ function DebuggerClient(ipAddr)
       case JERRY_DEBUGGER_PARSE_FUNCTION:
       case JERRY_DEBUGGER_BREAKPOINT_LIST:
       case JERRY_DEBUGGER_RESOURCE_NAME:
+      case JERRY_DEBUGGER_RESOURCE_NAME_END:
       case JERRY_DEBUGGER_FUNCTION_NAME:
+      case JERRY_DEBUGGER_FUNCTION_NAME_END:
       {
         parseObj = new ParseSource()
         parseObj.receive(message)
@@ -876,6 +891,12 @@ function debuggerCommand(event)
     case "d":
     case "delete":
       debuggerObj.deleteBreakpoint(args[2]);
+
+      commandBox.value = "";
+      return true;
+
+    case "stop":
+      debuggerObj.encodeMessage("B", [ JERRY_DEBUGGER_STOP ]);
 
       commandBox.value = "";
       return true;

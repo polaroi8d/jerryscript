@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function
 import socket
 import sys
 import argparse
@@ -22,7 +23,6 @@ import re
 from cmd import Cmd
 from struct import *
 from pprint import pprint # For the readable stack printing
-from __future__ import print_function
 
 # Messages sent by the server to client
 JERRY_DEBUGGER_CONFIGURATION = 1
@@ -32,11 +32,13 @@ JERRY_DEBUGGER_PARSE_FUNCTION = 4
 JERRY_DEBUGGER_BREAKPOINT_LIST = 5
 JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST = 6
 JERRY_DEBUGGER_RESOURCE_NAME = 7
-JERRY_DEBUGGER_FUNCTION_NAME = 8
-JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 9
-JERRY_DEBUGGER_BREAKPOINT_HIT = 10
-JERRY_DEBUGGER_BACKTRACE = 11
-JERRY_DEBUGGER_BACKTRACE_END = 12
+JERRY_DEBUGGER_RESOURCE_NAME_END = 8
+JERRY_DEBUGGER_FUNCTION_NAME = 9
+JERRY_DEBUGGER_FUNCTION_NAME_END = 10
+JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 11
+JERRY_DEBUGGER_BREAKPOINT_HIT = 12
+JERRY_DEBUGGER_BACKTRACE = 13
+JERRY_DEBUGGER_BACKTRACE_END = 14
 
 # Messages sent by the client to server
 JERRY_DEBUGGER_FREE_BYTE_CODE_CP = 1
@@ -135,7 +137,7 @@ class DebuggerPrompt(Cmd):
 
     def insert_breakpoint(self, args):
         if args == '':
-            print 'Error: breakpoint index expected'
+            print('Error: breakpoint index expected')
         else:
             set_breakpoint(self.debugger, args)
 
@@ -150,7 +152,7 @@ class DebuggerPrompt(Cmd):
     def exec_command(self, args, command_id):
         self.stop = True
         if args != '':
-            print 'Error: no argument expected'
+            print('Error: no argument expected')
         else:
             self.debugger.send_command(command_id)
 
@@ -181,23 +183,23 @@ class DebuggerPrompt(Cmd):
     def do_list(self, args):
         """ Listed the available breakpoints """
         if args != '':
-            print 'Error: no argument expected'
+            print('Error: no argument expected')
             return
 
         for breakpoint in self.debugger.active_breakpoint_list.values():
             source = breakpoint.function.source
-            print '%d: %s' % (breakpoint.active_index, breakpoint.to_string())
+            print('%d: %s' % (breakpoint.active_index, breakpoint.to_string()))
 
     def do_delete(self, args):
         """ Delete the given breakpoint """
         if not args:
-            print 'Error: breakpoint index expected'
+            print('Error: breakpoint index expected')
             return
 
         try:
             breakpoint_index = int(args)
         except:
-            print 'Error: integer number expected'
+            print('Error: integer number expected')
             return
 
         if breakpoint_index in self.debugger.active_breakpoint_list:
@@ -206,7 +208,7 @@ class DebuggerPrompt(Cmd):
             breakpoint.active_index = -1
             self.debugger.send_breakpoint(breakpoint)
         else:
-            print 'Error: breakpoint %d not found' % (breakpoint_index)
+            print('Error: breakpoint %d not found' % (breakpoint_index))
 
     def exec_backtrace(self, args):
         max_depth = 0
@@ -215,10 +217,10 @@ class DebuggerPrompt(Cmd):
             try:
                 max_depth = int(args)
                 if max_depth <= 0:
-                    print 'Error: positive integer number expected'
+                    print('Error: positive integer number expected')
                     return
             except:
-                print 'Error: positive integer number expected'
+                print('Error: positive integer number expected')
                 return
 
         message = pack(self.debugger.byte_order + 'BBIB' + self.debugger.idx_format,
@@ -413,10 +415,10 @@ def parse_source(debugger, data):
             logging.error('Parser error!')
             return
 
-        if buffer_type == JERRY_DEBUGGER_RESOURCE_NAME:
+        if buffer_type in [JERRY_DEBUGGER_RESOURCE_NAME, JERRY_DEBUGGER_RESOURCE_NAME_END]:
             source_name += unpack('%ds' % (buffer_size), data[3:buffer_size+3])[0]
 
-        elif buffer_type == JERRY_DEBUGGER_FUNCTION_NAME:
+        elif buffer_type in [JERRY_DEBUGGER_FUNCTION_NAME, JERRY_DEBUGGER_FUNCTION_NAME_END]:
             function_name += unpack('%ds' % (buffer_size), data[3:buffer_size+3])[0]
 
         elif buffer_type == JERRY_DEBUGGER_PARSE_FUNCTION:
@@ -534,11 +536,11 @@ def set_breakpoint(debugger, string):
                 if function.first_line >= 0:
                    enable_breakpoint(debugger, function.lines[function.first_line])
                 else:
-                   print 'Function %s has no breakpoints.' % (string)
+                   print('Function %s has no breakpoints.' % (string))
                 found = True
 
     if not found:
-        print 'Breakpoint not found'
+        print('Breakpoint not found')
         return
 
 def main():
@@ -568,7 +570,9 @@ def main():
                            JERRY_DEBUGGER_PARSE_FUNCTION,
                            JERRY_DEBUGGER_BREAKPOINT_LIST,
                            JERRY_DEBUGGER_RESOURCE_NAME,
-                           JERRY_DEBUGGER_FUNCTION_NAME]:
+                           JERRY_DEBUGGER_RESOURCE_NAME_END,
+                           JERRY_DEBUGGER_FUNCTION_NAME,
+                           JERRY_DEBUGGER_FUNCTION_NAME_END]:
             parse_source(debugger, data)
 
         elif buffer_type == JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP:
@@ -584,7 +588,7 @@ def main():
             if breakpoint.active_index >= 0:
                 breakpoint_index = ' breakpoint:%d' % (breakpoint.active_index)
 
-            print 'Stopped at%s %s' % (breakpoint_index, breakpoint.to_string())
+            print('Stopped at%s %s' % (breakpoint_index, breakpoint.to_string()))
 
             prompt.cmdloop()
 
@@ -607,11 +611,11 @@ def main():
 
                     if best_offset >= 0:
                         breakpoint = function.offsets[best_offset]
-                        print 'Frame %d: %s' % (frame_index, breakpoint.to_string())
+                        print('Frame %d: %s' % (frame_index, breakpoint.to_string()))
                     elif function.name:
-                        print 'Frame %d: %s()' % (frame_index, function.name)
+                        print('Frame %d: %s()' % (frame_index, function.name))
                     else:
-                        print 'Frame %d: <unknown>()' % (frame_index)
+                        print('Frame %d: <unknown>()' % (frame_index))
 
                     frame_index += 1
                     buffer_pos += 6
